@@ -1,4 +1,4 @@
-# gpswts - GPS Web Time Server
+# HouseClock - A GPS Network Time Server with Web console
 
 A project to create a simple stratum 1 NTP server based on a local GPS time source (NMEA only).
 
