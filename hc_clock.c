@@ -76,7 +76,7 @@ const char *hc_clock_help (int level) {
 void hc_clock_initialize (int argc, const char **argv) {
 
     int i;
-    const char *precision_option = "100";
+    const char *precision_option = "50"; // ms
 
     clockShowDrift = 0;
 
@@ -95,63 +95,80 @@ void hc_clock_synchronize(const struct timeval *gps,
     time_t drift = ((gps->tv_sec - local->tv_sec) * 1000)
                  + ((gps->tv_usec - local->tv_usec) / 1000) + latency;
 
+    time_t absdrift = (drift < 0)? (0 - drift) : drift;
+
     if (clockShowDrift) {
         printf ("%8.3f\n", drift/1000.0);
         return;
     }
 
-    if (drift > clockPrecision || drift < 0 - clockPrecision) {
+    if (absdrift < clockPrecision) {
+        clockSynchronized = 1;
+        return;
+    }
 
-        // GPS and local system time have drifted apart.
+    // GPS and local system time have drifted apart.
+
+    DEBUG {
+        printf ("Detected drift of %s%ld.%03.3d seconds\n",
+                (drift < 0)?"-":"",
+                (long)(absdrift/1000), (int)(absdrift%1000));
+        printf ("   GPS = %ld.%3.3d, System = %ld.%3.3d\n",
+                gps->tv_sec, gps->tv_usec, local->tv_sec, local->tv_usec);
+    }
+
+    if (absdrift >= 10000) {
+
+        // Too much of a difference: force system time.
+        //
+        struct timeval now;
+        struct timeval adjusted = *gps;
+
+        gettimeofday (&now, NULL);
+
+        // Adjust the GMT time from the time of the fix to this
+        // current time, as estimated using the local clock.
+        //
+        adjusted.tv_sec += (now.tv_sec - local->tv_sec);
+        adjusted.tv_usec += (now.tv_usec - local->tv_usec);
+        if (adjusted.tv_usec > 1000000) {
+            adjusted.tv_sec += 1;
+            adjusted.tv_usec -= 1000000;
+        } else if (adjusted.tv_usec < 0) {
+            adjusted.tv_sec -= 1;
+            adjusted.tv_usec += 1000000;
+        }
 
         DEBUG {
-            printf ("Detected drift of %s%ld.%03.3d seconds\n",
-                    (drift < 0)?"-":"",
-                    (long)(abs(drift)/1000), (int)(abs(drift)%1000));
-            printf ("   GPS = %ld.%3.3d, System = %ld.%3.3d\n",
-                    gps->tv_sec, gps->tv_usec, local->tv_sec, local->tv_usec);
+            printf ("Forcing time to %ld.%03.3d seconds\n",
+                    (long)(adjusted.tv_sec), (int)(adjusted.tv_usec/1000));
         }
+        settimeofday (&adjusted, NULL);
 
-        if (drift > 10000 || drift < -10000) {
-
-            // Too much of a difference: force system time.
-            //
-            struct timeval now;
-            struct timeval adjusted = *gps;
-
-            gettimeofday (&now, NULL);
-
-            // Adjust the GMT time from the time of the fix to this
-            // current time, as estimated using the local clock.
-            //
-            adjusted.tv_sec += (now.tv_sec - local->tv_sec);
-            adjusted.tv_usec += (now.tv_usec - local->tv_usec);
-            if (adjusted.tv_usec > 1000000) {
-                adjusted.tv_sec += 1;
-                adjusted.tv_usec -= 1000000;
-            } else if (adjusted.tv_usec < 0) {
-                adjusted.tv_sec -= 1;
-                adjusted.tv_usec += 1000000;
-            }
-
-            DEBUG {
-                printf ("Forcing time to %ld.%03.3d seconds\n",
-                        (long)(adjusted.tv_sec), (int)(adjusted.tv_usec/1000));
-            }
-            settimeofday (&adjusted, NULL);
-
-        } else {
-
-            // Small difference: adjust the time progressively.
-            //
-            struct timeval delta;
-
-            delta.tv_sec = (drift / 1000);
-            delta.tv_usec = (drift % 1000) * 1000;
-            adjtime (&delta, NULL);
-        }
     } else {
-        clockSynchronized = 1;
+
+        // Small difference: adjust the time progressively.
+        //
+        time_t leftover;
+        struct timeval delta;
+
+        // What is the current situation in the kernel?
+        // We do not want to interrupt an adjustment that
+        // is meant to correct the current drift, however
+        // if the drift has reversed sign, we need to reverse
+        // direction of the adjustment. (Remember that the drift
+        // value must be significant to have gotten here.)
+
+        adjtime (NULL, &delta);
+        leftover = (delta.tv_sec * 1000) + (delta.tv_usec / 1000);
+
+        if (leftover * drift <= 0) { // Different adjustment
+           DEBUG printf ("New adjustment: %d replaces %d\n",
+                         drift, leftover);
+           delta.tv_sec = (drift / 1000);
+           delta.tv_usec = (drift % 1000) * 1000;
+           adjtime (&delta, NULL);
+        }
     }
 }
 
