@@ -82,7 +82,7 @@ void hc_clock_initialize (int argc, const char **argv) {
 
     for (i = 1; i < argc; ++i) {
         hc_match ("-precision=", argv[i], &precision_option);
-        clockShowDrift |= hc_match ("-drift", argv[i], NULL);
+        clockShowDrift |= hc_present ("-drift", argv[i]);
     }
     clockPrecision = atoi(precision_option);
 
@@ -97,7 +97,7 @@ void hc_clock_synchronize(const struct timeval *gps,
 
     time_t absdrift = (drift < 0)? (0 - drift) : drift;
 
-    if (clockShowDrift) {
+    if (clockShowDrift || hc_test_mode()) {
         printf ("%8.3f\n", drift/1000.0);
         return;
     }

@@ -65,10 +65,15 @@ int hc_present (const char *reference, const char *input) {
     return strcmp (reference, input) == 0;
 }
 
-static int GpswtsDebug = 0;
+static int HcDebug = 0;
+static int HcTest = 0;
 
 int hc_debug_enabled (void) {
-    return GpswtsDebug;
+    return HcDebug;
+}
+
+int hc_test_mode (void) {
+    return HcTest;
 }
 
 static void hc_help (const char *argv0) {
@@ -76,17 +81,23 @@ static void hc_help (const char *argv0) {
     int i = 1;
     const char *help;
 
-    printf ("%s [-h] [-period=N]%s\n", argv0, hc_ntp_help(0));
+    printf ("%s [-h] [-debug] [-test] [-period=N]%s\n", argv0, hc_ntp_help(0));
 
     printf ("\nGeneral options:\n");
     printf ("   -h:              print this help.\n");
+    printf ("   -debug           prints a lot of debug traces.\n");
+    printf ("   -test            prints time drift compare to GPS.\n");
     printf ("   -period=N        how often the server advertizes itself\n");
 
     printf ("\nNTP options:\n");
-    help = hc_ntp_help(i);
+    help = hc_ntp_help(i=1);
     while (help) {
         printf ("   %s\n", help);
         help = hc_ntp_help(++i);
+    }
+    help = hc_ntp_help(i=1);
+    while (help) {
+        printf ("   %s\n", help);
         help = hc_nmea_help(++i);
     }
     exit (0);
@@ -111,13 +122,16 @@ int main (int argc, const char **argv) {
             hc_help(argv[0]);
         }
         hc_match ("-period=", argv[i], &periodstr);
-        if (hc_present ("-debug", argv[i])) GpswtsDebug = 1;
+        if (hc_present ("-debug", argv[i])) HcDebug = 1;
+        if (hc_present ("-test", argv[i])) HcTest = 1;
     }
     period = atoi(periodstr);
 
     ntpsocket = hc_ntp_initialize (argc, argv);
-    if (ntpsocket < 0) return 1;
-    if (maxfd <= ntpsocket) maxfd = ntpsocket + 1;
+    if (!HcTest) {
+        if (ntpsocket < 0) return 1;
+        if (maxfd <= ntpsocket) maxfd = ntpsocket + 1;
+    }
 
     gpstty = hc_nmea_initialize (argc, argv);
     if (maxfd <= gpstty) maxfd = gpstty + 1;
@@ -130,7 +144,7 @@ int main (int argc, const char **argv) {
         fd_set readset;
 
         FD_ZERO(&readset);
-        if (ntpsocket) {
+        if (ntpsocket > 0) {
             FD_SET(ntpsocket, &readset);
         }
 

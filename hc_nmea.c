@@ -181,7 +181,7 @@ int hc_nmea_initialize (int argc, const char **argv) {
     for (i = 1; i < argc; ++i) {
         hc_match ("-gps=", argv[i], &gpsDevice);
         hc_match ("-latency=", argv[i], &latency_option);
-        if (hc_match ("-burst", argv[i], NULL)) {
+        if (hc_present ("-burst", argv[i])) {
             gpsUseBurst = 1;
         }
     }

@@ -49,13 +49,16 @@
  * Only supports one socket per process.
  */
 
+#include <errno.h>
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
 #include <ctype.h>
 #include <unistd.h>
 #include <fcntl.h>
+#include <arpa/inet.h>
 
+#include "houseclock.h"
 #include "hc_broadcast.h"
 
 static int udpserver = -1;
@@ -68,20 +71,23 @@ int hc_broadcast_open (const char *service) {
     int port = -1;
     int flags;
 
-    struct servent *entry = getservbyname(service, NULL);
+    struct servent *entry = getservbyname(service, "udp");
 
     if (entry == NULL) {
        if (isdigit (service[0])) {
           port = atoi(service);
 	   }
     } else {
-	   port = entry->s_port;
+	   port = ntohs(entry->s_port);
     }
 
     if (port < 0) {
 	   fprintf (stderr, "invalid service name %s\n", service);
 	   exit (1);
     }
+
+    DEBUG printf ("Opening UDP port %d (name: %s)\n",
+                  port, (entry == NULL)?"(null)":entry->s_name);
 
     udpserver = socket(PF_INET, SOCK_DGRAM, IPPROTO_UDP);
     if (udpserver < 0) {
@@ -121,7 +127,8 @@ int hc_broadcast_open (const char *service) {
 
     if (bind(udpserver, (struct sockaddr *)&netaddress,
 			             sizeof(netaddress)) < 0) {
-       fprintf (stderr, "cannot bind to service %s\n", service);
+       fprintf (stderr, "cannot bind to service %s: %s\n",
+                service, strerror(errno));
        exit (1);
     }
     return udpserver;

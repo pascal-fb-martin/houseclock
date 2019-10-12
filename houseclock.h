@@ -31,6 +31,8 @@ int hc_match (const char *reference,
 
 int hc_present (const char *reference, const char *input);
 
+int hc_test_mode (void);
 int hc_debug_enabled (void);
+
 #define DEBUG if(hc_debug_enabled())
 

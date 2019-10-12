@@ -118,6 +118,8 @@ int hc_ntp_initialize (int argc, const char **argv) {
     if (strcmp(ntpservice, "none") == 0) {
         return 0; // Do not act as a NTP server.
     }
+    if (hc_test_mode()) return -1;
+
     return hc_broadcast_open (ntpservice);
 }
 

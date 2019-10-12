@@ -18,7 +18,7 @@
  * Boston, MA  02110-1301, USA.
  *
  *
- * gpswts_broadcast.h - Manage broadcast & UDP communications.
+ * hc_broadcast.h - Manage broadcast & UDP communications.
  */
 
 #include <sys/types.h>
