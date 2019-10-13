@@ -315,8 +315,9 @@ static void hc_nmea_record (const char *sentence,
     decoded->flags = 0;
 }
 
-static void hc_nmea_mark (int flags) {
+static void hc_nmea_mark (int flags, const struct timeval *timestamp) {
     gpsHistory[gpsLatest].flags = flags;
+    hc_nmea_status_db->timestamp = *timestamp;
 }
 
 static void hc_nmea_store_position (char **fields) {
@@ -491,7 +492,7 @@ int hc_nmea_process (const struct timeval *received) {
 
         flags |= hc_nmea_decode (gpsBuffer+start);
 
-        hc_nmea_mark (flags);
+        hc_nmea_mark (flags, &bursttiming);
 
         if (hc_nmea_ready(flags)) {
             struct timeval gmt;

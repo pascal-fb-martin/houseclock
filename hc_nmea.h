@@ -36,6 +36,7 @@ typedef struct {
     char latitude[20];
     char longitude[20];
     char hemisphere[2];
+    struct timeval timestamp;
 } hc_nmea_status;
 
 void hc_nmea_convert (char *buffer, int size,

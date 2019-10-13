@@ -75,11 +75,19 @@ static const char *hc_http_status (const char *method, const char *uri,
                      status_db->longitude, status_db->hemisphere[1]);
 
     snprintf (buffer, sizeof(buffer),
-              "{\"gps\":{\"fix\":%s,\"time\":\"%s\",\"date\":\"%s\""
-              ",\"latitude\":%s,\"longitude\":%s}}",
+              "{\"gps\":{\"fix\":%s"
+              ",\"time\":[%c%c,%c%c,%c%c],\"date\":[%d,%c%c,%c%c]"
+              ",\"latitude\":%s,\"longitude\":%s,\"timestamp\":%zd.%03d}}",
               status_db->fix?"true":"false",
-              status_db->time, status_db->date,
-              latitude, longitude);
+              status_db->time[0], status_db->time[1],
+              status_db->time[2], status_db->time[3],
+              status_db->time[4], status_db->time[5],
+              2000 + (status_db->date[4]-'0')*10 + (status_db->date[5]-'0'),
+              status_db->date[2], status_db->date[3],
+              status_db->date[0], status_db->date[1],
+              latitude, longitude,
+              (size_t) (status_db->timestamp.tv_sec),
+              status_db->timestamp.tv_usec/1000);
     echttp_content_type_json();
     return buffer;
 }
