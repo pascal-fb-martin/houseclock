@@ -1,6 +1,6 @@
 # HouseClock - A GPS Network Time Server with Web console
 
-This is a project to create a simple stratum 1 NTP server based on a local GPS time source for home use.
+This is a project to create a simple stratum 1 NTP server based on a local GPS time source for home use. This project depends on [echttp](https://github.com/pascal-fb-martin/echttp).
 
 The main goal is to setup a local time server not dependent on an Internet link, easy to install, simple to configure and that can be monitored from a web browser.
 

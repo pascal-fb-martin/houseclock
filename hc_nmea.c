@@ -115,6 +115,7 @@
 #include <time.h>
 
 #include "houseclock.h"
+#include "hc_db.h"
 #include "hc_clock.h"
 #include "hc_nmea.h"
 
@@ -146,6 +147,8 @@ static int gpsTty = 0;
 
 static int gpsUseBurst = 0;
 
+static hc_nmea_status *hc_nmea_status_db = 0;
+
 const char *hc_nmea_help (int level) {
 
     static const char *nmeaHelp[] = {
@@ -165,8 +168,8 @@ static void hc_nmea_reset (void) {
     for (i = 0; i < GPS_DEPTH; ++i) {
         gpsHistory[i].sentence[0] = 0;
     }
-    gpsDate[0] = 0;
-    gpsTime[0] = 0;
+    hc_nmea_status_db->date[0] = 0;
+    hc_nmea_status_db->time[0] = 0;
     gpsTty = 0;
 }
 
@@ -186,6 +189,13 @@ int hc_nmea_initialize (int argc, const char **argv) {
         }
     }
     gpsLatency = atoi(latency_option);
+
+    i = hc_db_new (HC_NMEA_STATUS, sizeof(hc_nmea_status), 1);
+    if (i != 0) {
+        fprintf (stderr, "cannot create %s: %s\n", HC_NMEA_STATUS, strerror(i));
+        exit(1);
+    }
+    hc_nmea_status_db = (hc_nmea_status *) hc_db_get (HC_NMEA_STATUS);
 
     hc_nmea_reset();
     gpsTty = open(gpsDevice, O_RDONLY);
@@ -262,6 +272,9 @@ static int hc_nmea_gettime (struct timeval *gmt) {
     time_t now = time(0L);
     struct tm local;
 
+    char *gpsDate = hc_nmea_status_db->date;
+    char *gpsTime = hc_nmea_status_db->time;
+
     if ((gpsDate[0] == 0) || (gpsTime[0] == 0)) return 0;
 
     // Decode the NMEA time into a GMT timeval value.
@@ -282,8 +295,10 @@ static int hc_nmea_gettime (struct timeval *gmt) {
 static int hc_nmea_valid (const char *status, const char *integrity) {
 
     if ((*status == 'A') && (*integrity == 'A' || *integrity == 'D')) {
+        hc_nmea_status_db->fix = 1;
         return 1;
     }
+    hc_nmea_status_db->fix = 0;
     return 0;
 }
 
@@ -304,11 +319,24 @@ static void hc_nmea_mark (int flags) {
     gpsHistory[gpsLatest].flags = flags;
 }
 
+static void hc_nmea_store_position (char **fields) {
+    strncpy (hc_nmea_status_db->latitude,
+             fields[0], sizeof(hc_nmea_status_db->latitude));
+    strncpy (hc_nmea_status_db->longitude,
+             fields[2], sizeof(hc_nmea_status_db->longitude));
+    hc_nmea_status_db->hemisphere[0] = fields[1][0];
+    hc_nmea_status_db->hemisphere[1] = fields[3][0];
+    hc_nmea_status_db->fix = 1;
+}
+
 static int hc_nmea_decode (char *sentence) {
 
     char *fields[80]; // large enough for no overflow ever.
     int count;
     int newfix = 0;
+
+    char *gpsDate = hc_nmea_status_db->date;
+    char *gpsTime = hc_nmea_status_db->time;
 
     count = hc_nmea_splitfields(sentence, fields);
 
@@ -319,6 +347,9 @@ static int hc_nmea_decode (char *sentence) {
                 newfix =
                     hc_nmea_isnew(fields[1], gpsTime) |
                     hc_nmea_isnew(fields[9], gpsDate);
+                if (newfix) hc_nmea_store_position (fields+3);
+            } else {
+                hc_nmea_status_db->fix = 0;
             }
         } else {
             DEBUG printf ("Invalid GPRMC sentence: too few fields\n");
@@ -330,6 +361,9 @@ static int hc_nmea_decode (char *sentence) {
             int  sats = atoi(fields[8]);
             if (fix >= 1 && fix <= 5 && sats >= 3) {
                 newfix = hc_nmea_isnew(fields[1], gpsTime);
+                if (newfix) hc_nmea_store_position (fields+2);
+            } else {
+                hc_nmea_status_db->fix = 0;
             }
         } else {
             DEBUG printf ("Invalid GPGGA sentence: too few fields\n");
@@ -339,6 +373,9 @@ static int hc_nmea_decode (char *sentence) {
         if (count > 7) {
             if (hc_nmea_valid (fields[6], fields[7])) {
                 newfix = hc_nmea_isnew(fields[5], gpsTime);
+                if (newfix) hc_nmea_store_position (fields+1);
+            } else {
+                hc_nmea_status_db->fix = 0;
             }
         } else {
             DEBUG printf ("Invalid GPGLL sentence: too few fields\n");
@@ -475,5 +512,27 @@ int hc_nmea_process (const struct timeval *received) {
         memmove (gpsBuffer, gpsBuffer+leftover, gpsCount);
 
     return gpsTty;
+}
+
+void hc_nmea_convert (char *buffer, int size,
+                      const char *source, char hemisphere) {
+    char *sep;
+    int digits;
+    if (hemisphere == 'W' || hemisphere == 'S') {
+        buffer[0] = '-';
+        buffer += 1;
+        size -= 1;
+    }
+    sep = strchr (source, '.');
+    if (sep) {
+        digits = sep - source - 2;
+    } else {
+        digits = strlen(source) - 2;
+    }
+    strncpy (buffer, source, digits);
+    buffer[digits] = 0;
+    double degrees = atoi(buffer);
+    double minutes = atof(source+digits);
+    snprintf (buffer, size, "%f", degrees + (minutes / 60.0));
 }
 

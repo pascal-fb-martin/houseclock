@@ -42,12 +42,19 @@
 
 #include <stdlib.h>
 #include <sys/select.h>
+#include <sys/types.h>
+#include <unistd.h>
+#include <stdio.h>
+#include <errno.h>
 
 #include "houseclock.h"
+#include "hc_db.h"
 #include "hc_clock.h"
 #include "hc_nmea.h"
 #include "hc_ntp.h"
 #include "hc_broadcast.h"
+
+#include "hc_http.h"
 
 
 int hc_match (const char *reference,
@@ -88,6 +95,7 @@ static void hc_help (const char *argv0) {
     printf ("   -debug           prints a lot of debug traces.\n");
     printf ("   -test            prints time drift compare to GPS.\n");
     printf ("   -period=N        how often the server advertizes itself\n");
+    printf ("   -db=N            Size of the internal database, in MB\n");
 
     printf ("\nNTP options:\n");
     help = hc_ntp_help(i=1);
@@ -115,6 +123,7 @@ int main (int argc, const char **argv) {
     time_t last_period = 0;
     struct timeval now;
     const char *periodstr = "300";
+    const char *dbsizestr = "0";
 
     int i;
     for (i = 1; i < argc; ++i) {
@@ -122,10 +131,22 @@ int main (int argc, const char **argv) {
             hc_help(argv[0]);
         }
         hc_match ("-period=", argv[i], &periodstr);
+        hc_match ("-db=", argv[i], &dbsizestr);
         if (hc_present ("-debug", argv[i])) HcDebug = 1;
         if (hc_present ("-test", argv[i])) HcTest = 1;
     }
     period = atoi(periodstr);
+
+    // Start the web interface.
+    hc_db_create (atoi(dbsizestr)*1024*1024);
+    pid_t httpid = fork();
+    if (httpid == 0) {
+        hc_http (argc, argv);
+    }
+    if (httpid < 0) {
+        fprintf (stderr, "Cannot fork: %s\n", strerror (errno));
+        exit (1);
+    }
 
     ntpsocket = hc_ntp_initialize (argc, argv);
     if (!HcTest) {

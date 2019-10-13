@@ -16,28 +16,6 @@
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 51 Franklin Street, Fifth Floor,
  * Boston, MA  02110-1301, USA.
- *
- *
- * hc_nmea.h - NMEA protocol decoder.
  */
-const char *hc_nmea_help (int level);
-
-int hc_nmea_initialize (int argc, const char **argv);
-int hc_nmea_process (const struct timeval *received);
-
-/* The GPS database:
- */
-#define HC_NMEA_STATUS "GpsStatus"
-
-typedef struct {
-    char fix;
-    char time[20];
-    char date[20];
-    char latitude[20];
-    char longitude[20];
-    char hemisphere[2];
-} hc_nmea_status;
-
-void hc_nmea_convert (char *buffer, int size,
-                      const char *source, char hemisphere);
+void hc_http (int argc, const char **argv);
 
