@@ -56,11 +56,14 @@
 
 #include "houseclock.h"
 #include "hc_clock.h"
+#include "hc_db.h"
 
 static int clockPrecision;
 static int clockShowDrift = 0;
 
 static int clockSynchronized = 0;
+
+static int *hc_clock_drift_db = 0;
 
 const char *hc_clock_help (int level) {
 
@@ -87,6 +90,14 @@ void hc_clock_initialize (int argc, const char **argv) {
     clockPrecision = atoi(precision_option);
 
     clockSynchronized = 0;
+
+    i = hc_db_new (HC_CLOCK_DRIFT, sizeof(int), 120);
+    if (i != 0) {
+        fprintf (stderr, "cannot create %s: %s\n", HC_CLOCK_DRIFT, strerror(i));
+        exit (1);
+    }
+    hc_clock_drift_db = (int *) hc_db_get (HC_CLOCK_DRIFT);
+    for (i = 0; i < 120; ++i) hc_clock_drift_db[i] = 0;
 }
 
 void hc_clock_synchronize(const struct timeval *gps,
@@ -97,8 +108,10 @@ void hc_clock_synchronize(const struct timeval *gps,
 
     time_t absdrift = (drift < 0)? (0 - drift) : drift;
 
+    if (hc_clock_drift_db) hc_clock_drift_db[local->tv_sec%120] = (int)drift;
+
     if (clockShowDrift || hc_test_mode()) {
-        printf ("%8.3f\n", drift/1000.0);
+        printf ("[%d]=%8.3f\n", local->tv_sec%120, drift/1000.0);
         return;
     }
 

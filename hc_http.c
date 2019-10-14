@@ -37,6 +37,7 @@
 #include "houseclock.h"
 #include "hc_db.h"
 #include "hc_nmea.h"
+#include "hc_clock.h"
 #include "hc_http.h"
 
 #include "echttp.h"
@@ -51,19 +52,53 @@ static void hc_background (int fd, int mode) {
 
 static const char *hc_http_status (const char *method, const char *uri,
                                    const char *data, int length) {
-    static char buffer[1024];
+    static char buffer[8192];
+    static char *driftbuffer;
+    static int   driftbuffersize;
     static hc_nmea_status *status_db = 0;
+    static int *drift_db = 0;
+    static int drift_count;
     char latitude[20];
     char longitude[20];
 
     if (status_db == 0) {
+        status_db = (hc_nmea_status *) hc_db_get (HC_NMEA_STATUS);
+        if (status_db == 0) {
+            echttp_error (503, "Service Temporarily Unavailable");
+            return "";
+        }
         if (hc_db_get_count (HC_NMEA_STATUS) != 1
             || hc_db_get_size (HC_NMEA_STATUS) != sizeof(hc_nmea_status)) {
             fprintf (stderr, "wrong data structure for table %s\n",
                      HC_NMEA_STATUS);
             exit (1);
         }
-        status_db = (hc_nmea_status *) hc_db_get (HC_NMEA_STATUS);
+    }
+
+    if (drift_db == 0) {
+        drift_db = (int *) hc_db_get (HC_CLOCK_DRIFT);
+        if (drift_db == 0) {
+            echttp_error (503, "Service Temporarily Unavailable");
+            return "";
+        }
+        drift_count = hc_db_get_count (HC_CLOCK_DRIFT);
+        if (hc_db_get_size (HC_CLOCK_DRIFT) != sizeof(int)) {
+            fprintf (stderr, "wrong data structure for table %s\n",
+                     HC_CLOCK_DRIFT);
+            exit (1);
+        }
+        driftbuffersize = drift_count * 12;
+        driftbuffer = malloc(driftbuffersize);
+    }
+
+    snprintf (driftbuffer, driftbuffersize, "%d", drift_db[0]);
+    int room = driftbuffersize - strlen(driftbuffer);
+    char *p = driftbuffer + (driftbuffersize-room);
+    int i;
+    for (i = 1; i < drift_count; ++i) {
+        snprintf (p, room, ",%d", drift_db[i]);
+        room -= strlen(p);
+        p = driftbuffer + (driftbuffersize-room);
     }
 
     // This conversion is not made when decoding the NMEA stream to avoid
@@ -77,7 +112,8 @@ static const char *hc_http_status (const char *method, const char *uri,
     snprintf (buffer, sizeof(buffer),
               "{\"gps\":{\"fix\":%s"
               ",\"time\":[%c%c,%c%c,%c%c],\"date\":[%d,%c%c,%c%c]"
-              ",\"latitude\":%s,\"longitude\":%s,\"timestamp\":%zd.%03d}}",
+              ",\"latitude\":%s,\"longitude\":%s,\"timestamp\":%zd.%03d}"
+              ",\"clock\":{\"drift\":[%s]}}",
               status_db->fix?"true":"false",
               status_db->time[0], status_db->time[1],
               status_db->time[2], status_db->time[3],
@@ -87,7 +123,8 @@ static const char *hc_http_status (const char *method, const char *uri,
               status_db->date[0], status_db->date[1],
               latitude, longitude,
               (size_t) (status_db->timestamp.tv_sec),
-              status_db->timestamp.tv_usec/1000);
+              status_db->timestamp.tv_usec/1000,
+              driftbuffer);
     echttp_content_type_json();
     return buffer;
 }

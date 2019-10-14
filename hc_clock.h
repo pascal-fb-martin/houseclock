@@ -27,3 +27,7 @@ void hc_clock_synchronize  (const struct timeval *gps,
                             const struct timeval *local, int latency);
 int  hc_clock_synchronized (void);
 
+/* Live database.
+ */
+#define HC_CLOCK_DRIFT "ClockDrift"
+
