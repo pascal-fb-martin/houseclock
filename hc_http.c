@@ -89,11 +89,18 @@ static const char *hc_http_status (const char *method, const char *uri,
 
     // This conversion is not made when decoding the NMEA stream to avoid
     // consuming CPU in the high-priority time synchronization process.
+    // If the GPS position information is not set, report the position
+    // of Greenwich.
     //
-    hc_nmea_convert (latitude, sizeof(latitude),
-                     nmea_db->latitude, nmea_db->hemisphere[0]);
-    hc_nmea_convert (longitude, sizeof(longitude),
-                     nmea_db->longitude, nmea_db->hemisphere[1]);
+    if (nmea_db->latitude[0] == 0 || nmea_db->longitude[0] == 0) {
+        strncpy (latitude, "0.0", sizeof(latitude));
+        strncpy (longitude, "0.0", sizeof(longitude));
+    } else {
+        hc_nmea_convert (latitude, sizeof(latitude),
+                         nmea_db->latitude, nmea_db->hemisphere[0]);
+        hc_nmea_convert (longitude, sizeof(longitude),
+                         nmea_db->longitude, nmea_db->hemisphere[1]);
+    }
 
     snprintf (JsonBuffer, sizeof(JsonBuffer),
               "{\"gps\":{\"fix\":%s"

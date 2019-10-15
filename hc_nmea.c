@@ -146,16 +146,18 @@ static const char *gpsDevice = "/dev/ttyACM0";
 static int gpsTty = 0;
 
 static int gpsUseBurst = 0;
+static int gpsPrivacy = 0;
 
 static hc_nmea_status *hc_nmea_status_db = 0;
 
 const char *hc_nmea_help (int level) {
 
     static const char *nmeaHelp[] = {
-        " [-gps=DEV] [-latency=N] [-burst]",
+        " [-gps=DEV] [-latency=N] [-burst] [-privacy]",
         "-gps=DEV:     TTY device from which to read the NMEA data.\n"
         "-latency=N:   delay between the GPS fix and the 1st NMEA sentence.\n"
-        "-burst:       Use burst start as the GPS timing reference",
+        "-burst:       Use burst start as the GPS timing reference\n"
+        "-privacy:     do not export location",
         NULL
     };
     return nmeaHelp[level];
@@ -170,6 +172,8 @@ static void hc_nmea_reset (void) {
     }
     hc_nmea_status_db->date[0] = 0;
     hc_nmea_status_db->time[0] = 0;
+    hc_nmea_status_db->latitude[0] = 0;
+    hc_nmea_status_db->longitude[0] = 0;
     gpsTty = 0;
 }
 
@@ -184,9 +188,8 @@ int hc_nmea_initialize (int argc, const char **argv) {
     for (i = 1; i < argc; ++i) {
         hc_match ("-gps=", argv[i], &gpsDevice);
         hc_match ("-latency=", argv[i], &latency_option);
-        if (hc_present ("-burst", argv[i])) {
-            gpsUseBurst = 1;
-        }
+        if (hc_present ("-burst", argv[i])) gpsUseBurst = 1;
+        if (hc_present ("-privacy", argv[i])) gpsPrivacy = 1;
     }
     gpsLatency = atoi(latency_option);
 
@@ -321,12 +324,14 @@ static void hc_nmea_mark (int flags, const struct timeval *timestamp) {
 }
 
 static void hc_nmea_store_position (char **fields) {
-    strncpy (hc_nmea_status_db->latitude,
-             fields[0], sizeof(hc_nmea_status_db->latitude));
-    strncpy (hc_nmea_status_db->longitude,
-             fields[2], sizeof(hc_nmea_status_db->longitude));
-    hc_nmea_status_db->hemisphere[0] = fields[1][0];
-    hc_nmea_status_db->hemisphere[1] = fields[3][0];
+    if (! gpsPrivacy) {
+        strncpy (hc_nmea_status_db->latitude,
+                 fields[0], sizeof(hc_nmea_status_db->latitude));
+        strncpy (hc_nmea_status_db->longitude,
+                 fields[2], sizeof(hc_nmea_status_db->longitude));
+        hc_nmea_status_db->hemisphere[0] = fields[1][0];
+        hc_nmea_status_db->hemisphere[1] = fields[3][0];
+    }
     hc_nmea_status_db->fix = 1;
 }
 
