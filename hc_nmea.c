@@ -147,6 +147,7 @@ static int gpsTty = 0;
 
 static int gpsUseBurst = 0;
 static int gpsPrivacy = 0;
+static int gpsShowNmea = 0;
 
 static hc_nmea_status *hc_nmea_status_db = 0;
 
@@ -156,6 +157,7 @@ const char *hc_nmea_help (int level) {
         " [-gps=DEV] [-latency=N] [-burst] [-privacy]",
         "-gps=DEV:     TTY device from which to read the NMEA data.\n"
         "-latency=N:   delay between the GPS fix and the 1st NMEA sentence.\n"
+        "-show-nmea:   trace NMEA sentences.\n"
         "-burst:       Use burst start as the GPS timing reference\n"
         "-privacy:     do not export location",
         NULL
@@ -190,6 +192,7 @@ int hc_nmea_initialize (int argc, const char **argv) {
         hc_match ("-latency=", argv[i], &latency_option);
         if (hc_present ("-burst", argv[i])) gpsUseBurst = 1;
         if (hc_present ("-privacy", argv[i])) gpsPrivacy = 1;
+        if (hc_present ("-show-nmea", argv[i])) gpsShowNmea = 1;
     }
     gpsLatency = atoi(latency_option);
 
@@ -400,7 +403,7 @@ static int hc_nmea_ready (int flags) {
     if (flags & GPSFLAGS_NEWBURST) burstinfo = "new";
 
     if (flags) {
-        DEBUG printf ("(%s fix, %s burst)\n", fixinfo, burstinfo);
+        if(gpsShowNmea) printf ("(%s fix, %s burst)\n", fixinfo, burstinfo);
     }
     return (flags == GPSFLAGS_NEWFIX+GPSFLAGS_NEWBURST);
 }
@@ -458,17 +461,20 @@ int hc_nmea_process (const struct timeval *received) {
         // We multiply the speed by 1000 to get some precision.
         // The other 1000 is because gpsDuration is in milliseconds.
         speed = (1000 * 1000 * gpsTotal) / gpsDuration;
-        DEBUG printf ("Calculated speed: %d.%03d Bytes/s\n",
-                      speed/1000, speed%1000);
+        if(gpsShowNmea)
+            printf ("Calculated speed: %d.%03d Bytes/s\n",
+                    speed/1000, speed%1000);
     } else {
         speed = 115000; // Arbitrary speed at the beginning.
     }
 
     if (previous.tv_usec > 0 && interval > 500) {
         hc_nmea_timing (received, &bursttiming, speed, gpsCount);
-        DEBUG printf ("Data received at %d.%03d, burst started at %d.%03d\n",
-                      received->tv_sec, received->tv_usec/1000,
-                      bursttiming.tv_sec, bursttiming.tv_usec/1000);
+        if (gpsShowNmea) {
+            printf ("Data received at %d.%03d, burst started at %d.%03d\n",
+                     received->tv_sec, received->tv_usec/1000,
+                     bursttiming.tv_sec, bursttiming.tv_usec/1000);
+        }
         // Whatever GPS time we got before is now old.
         gpsTime[0] = 0;
         flags = GPSFLAGS_NEWBURST;
@@ -488,7 +494,7 @@ int hc_nmea_process (const struct timeval *received) {
 
         if (gpsBuffer[start++] != '$') continue; // Skip invalid sentence.
 
-        DEBUG {
+        if (gpsShowNmea) {
             printf ("%11d.%03.3d: %s\n",
                     timing.tv_sec, timing.tv_usec/1000, gpsBuffer+start);
         }

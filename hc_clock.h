@@ -34,9 +34,11 @@ int  hc_clock_synchronized (void);
 #define HC_CLOCK_STATUS "ClockStatus"
 
 typedef struct {
-    int synchronized;
-    int precision;
-    int drift;
     struct timeval timestamp;
+    int   drift;
+    short precision;
+    char  synchronized;
+    char  count;
+    int   accumulator;
 } hc_clock_status;
 

@@ -53,10 +53,13 @@
  */
 
 #include <time.h>
+#include <errno.h>
 
 #include "houseclock.h"
 #include "hc_clock.h"
 #include "hc_db.h"
+
+#define HC_CLOCK_LEARNING_PERIOD 10
 
 static int clockPrecision;
 static int clockShowDrift = 0;
@@ -77,10 +80,15 @@ const char *hc_clock_help (int level) {
     return clockHelp[level];
 }
 
+static void hc_clock_start_learning (void) {
+    hc_clock_status_db->count = 0;
+    hc_clock_status_db->accumulator = 0;
+}
+
 void hc_clock_initialize (int argc, const char **argv) {
 
     int i;
-    const char *precision_option = "50"; // ms
+    const char *precision_option = "10"; // ms
 
     clockShowDrift = 0;
 
@@ -110,96 +118,107 @@ void hc_clock_initialize (int argc, const char **argv) {
     hc_clock_status_db->synchronized = 0;
     hc_clock_status_db->precision = clockPrecision;
     hc_clock_status_db->drift = 0;
+    hc_clock_start_learning ();
+}
+
+static void hc_clock_force (const struct timeval *gps,
+                            const struct timeval *local) {
+
+    struct timeval now;
+    struct timeval corrected = *gps;
+
+    gettimeofday (&now, NULL);
+
+    // Correct the GPS time from the time of the fix to this
+    // current time, as estimated using the local clock.
+    //
+    corrected.tv_sec += (now.tv_sec - local->tv_sec);
+    corrected.tv_usec += (now.tv_usec - local->tv_usec);
+    if (corrected.tv_usec > 1000000) {
+        corrected.tv_sec += 1;
+        corrected.tv_usec -= 1000000;
+    } else if (corrected.tv_usec < 0) {
+        corrected.tv_sec -= 1;
+        corrected.tv_usec += 1000000;
+    }
+
+    DEBUG {
+        printf ("Forcing time to %ld.%03.3d seconds\n",
+                (long)(corrected.tv_sec), (int)(corrected.tv_usec/1000));
+    }
+    if (settimeofday (&corrected, NULL) != 0) {
+        printf ("settimeofday() error %d\n", errno);
+    }
+}
+
+static void hc_clock_adjust (time_t drift) {
+
+    struct timeval delta;
+
+    delta.tv_sec = (drift / 1000);
+    delta.tv_usec = (drift % 1000) * 1000;
+    if (adjtime (&delta, NULL) != 0) {
+        printf ("adjtime() error %d\n", errno);
+    }
 }
 
 void hc_clock_synchronize(const struct timeval *gps,
                           const struct timeval *local, int latency) {
+
+    if (hc_clock_drift_db == 0) return;
+    if (hc_clock_status_db == 0) return;
 
     time_t drift = ((gps->tv_sec - local->tv_sec) * 1000)
                  + ((gps->tv_usec - local->tv_usec) / 1000) + latency;
 
     time_t absdrift = (drift < 0)? (0 - drift) : drift;
 
-    if (hc_clock_drift_db) hc_clock_drift_db[local->tv_sec%120] = (int)drift;
-    if (hc_clock_status_db) {
-        hc_clock_status_db->drift = (int)drift;
-        hc_clock_status_db->timestamp = *local;
-    }
+    hc_clock_drift_db[gps->tv_sec%120] = (int)drift;
+    hc_clock_status_db->drift = (int)drift;
+    hc_clock_status_db->timestamp = *local;
 
     if (clockShowDrift || hc_test_mode()) {
-        printf ("[%d]=%8.3f\n", local->tv_sec%120, drift/1000.0);
-        return;
-    }
-
-    if (absdrift < clockPrecision) {
-        clockSynchronized = 1;
-        if (hc_clock_status_db) hc_clock_status_db->synchronized = 1;
-        return;
-    }
-
-    // GPS and local system time have drifted apart.
-
-    DEBUG {
-        printf ("Detected drift of %s%ld.%03.3d seconds\n",
-                (drift < 0)?"-":"",
-                (long)(absdrift/1000), (int)(absdrift%1000));
-        printf ("   GPS = %ld.%3.3d, System = %ld.%3.3d\n",
-                gps->tv_sec, gps->tv_usec, local->tv_sec, local->tv_usec);
+        printf ("[%d] %8.3f\n", local->tv_sec%120, drift/1000.0);
+        if (hc_test_mode()) return;
     }
 
     if (absdrift >= 10000) {
-
         // Too much of a difference: force system time.
-        //
-        struct timeval now;
-        struct timeval adjusted = *gps;
-
-        gettimeofday (&now, NULL);
-
-        // Adjust the GMT time from the time of the fix to this
-        // current time, as estimated using the local clock.
-        //
-        adjusted.tv_sec += (now.tv_sec - local->tv_sec);
-        adjusted.tv_usec += (now.tv_usec - local->tv_usec);
-        if (adjusted.tv_usec > 1000000) {
-            adjusted.tv_sec += 1;
-            adjusted.tv_usec -= 1000000;
-        } else if (adjusted.tv_usec < 0) {
-            adjusted.tv_sec -= 1;
-            adjusted.tv_usec += 1000000;
-        }
-
-        DEBUG {
-            printf ("Forcing time to %ld.%03.3d seconds\n",
-                    (long)(adjusted.tv_sec), (int)(adjusted.tv_usec/1000));
-        }
-        settimeofday (&adjusted, NULL);
-
-    } else {
-
-        // Small difference: adjust the time progressively.
-        //
-        time_t leftover;
-        struct timeval delta;
-
-        // What is the current situation in the kernel?
-        // We do not want to interrupt an adjustment that
-        // is meant to correct the current drift, however
-        // if the drift has reversed sign, we need to reverse
-        // direction of the adjustment. (Remember that the drift
-        // value must be significant to have gotten here.)
-
-        adjtime (NULL, &delta);
-        leftover = (delta.tv_sec * 1000) + (delta.tv_usec / 1000);
-
-        if (leftover * drift <= 0) { // Different adjustment
-           DEBUG printf ("New adjustment: %d replaces %d\n",
-                         drift, leftover);
-           delta.tv_sec = (drift / 1000);
-           delta.tv_usec = (drift % 1000) * 1000;
-           adjtime (&delta, NULL);
-        }
+        hc_clock_force (gps, local);
+        hc_clock_start_learning();
+        return;
     }
+
+    // Accumulate an average drift, to eliminate one-time issues.
+    //
+    hc_clock_status_db->accumulator += (int)drift;
+    hc_clock_status_db->count += 1;
+    if (hc_clock_status_db->count < HC_CLOCK_LEARNING_PERIOD) return;
+
+    // We reached the end of a learning period.
+    // At this point we consider only the average drift
+    // calculated over the past learning period.
+    //
+    drift = hc_clock_status_db->accumulator / hc_clock_status_db->count;
+    absdrift = (drift < 0)? (0 - drift) : drift;
+    if (clockShowDrift)
+        printf ("Average drift: %d ms\n", drift);
+
+    if (absdrift < clockPrecision) {
+        clockSynchronized = 1;
+        hc_clock_status_db->synchronized = 1;
+    } else {
+        // GPS and local system time have drifted apart
+        // by a small difference: adjust the time progressively.
+        //
+        DEBUG {
+            printf ("Time adjust at GPS = %ld.%3.3d, System = %ld.%3.3d\n",
+                    (long)gps->tv_sec, (int)gps->tv_usec/1000,
+                    (long)local->tv_sec, (int)local->tv_usec/1000);
+        }
+        hc_clock_adjust (drift);
+    }
+    hc_clock_start_learning();
 }
 
 int hc_clock_synchronized (void) {

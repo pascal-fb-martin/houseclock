@@ -107,7 +107,8 @@ static const char *hc_http_status (const char *method, const char *uri,
               ",\"time\":[%c%c,%c%c,%c%c],\"date\":[%d,%c%c,%c%c]"
               ",\"latitude\":%s,\"longitude\":%s}"
               ",\"clock\":{\"synchronized\":%s"
-              ",\"precision\":%d,\"drift\":%d,\"timestamp\":%zd.%03d}}",
+              ",\"precision\":%d,\"drift\":%d,\"timestamp\":%zd.%03d}"
+              ",\"learn\":{\"count\":%d,\"accumulator\":%d}}",
               nmea_db->fix?"true":"false",
               nmea_db->time[0], nmea_db->time[1],
               nmea_db->time[2], nmea_db->time[3],
@@ -120,7 +121,9 @@ static const char *hc_http_status (const char *method, const char *uri,
               clock_db->precision,
               clock_db->drift,
               (size_t) (clock_db->timestamp.tv_sec),
-              clock_db->timestamp.tv_usec/1000);
+              clock_db->timestamp.tv_usec/1000,
+              clock_db->count, clock_db->accumulator);
+
     echttp_content_type_json();
     return JsonBuffer;
 }
