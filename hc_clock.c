@@ -224,9 +224,8 @@ void hc_clock_synchronize(const struct timeval *gps,
         // by a small difference: adjust the time progressively.
         //
         DEBUG {
-            printf ("Time adjust at GPS = %ld.%3.3d, System = %ld.%3.3d\n",
-                    (long)gps->tv_sec, (int)gps->tv_usec/1000,
-                    (long)local->tv_sec, (int)local->tv_usec/1000);
+            printf ("Time adjust at System = %ld.%3.3, drift=%d ms\n",
+                    (long)local->tv_sec, (int)local->tv_usec/1000, drift);
         }
         hc_clock_adjust (drift);
     }
