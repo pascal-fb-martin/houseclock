@@ -17,5 +17,7 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor,
  * Boston, MA  02110-1301, USA.
  */
+const char *hc_http_help (int level);
+
 void hc_http (int argc, const char **argv);
 

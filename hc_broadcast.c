@@ -145,31 +145,38 @@ void hc_broadcast_send (const char *data, int length) {
 }
 
 
-void hc_broadcast_reply
-        (const char *data, int length, in_addr_t destination) {
-
-    if (udpserver < 0) return;
-    netaddress.sin_addr.s_addr = destination;
-
-    sendto (udpserver, data, length, 0,
-              (struct sockaddr *)&netaddress, sizeof(netaddress));
+const char *hc_broadcast_format (struct sockaddr_in *addr) {
+    static char formatted[80];
+    snprintf (formatted, sizeof(formatted), "%d.%d.%d.%d:%d",
+              addr->sin_addr.s_addr & 0xff,
+              (addr->sin_addr.s_addr >> 8) & 0xff,
+              (addr->sin_addr.s_addr >> 16) & 0xff,
+              (addr->sin_addr.s_addr >> 24) & 0xff,
+              addr->sin_port);
+    return formatted;
 }
 
-int hc_broadcast_receive (char *buffer, int size, in_addr_t *source) {
+void hc_broadcast_reply
+        (const char *data, int length, struct sockaddr_in *destination) {
+
+    if (udpserver < 0) return;
+
+    sendto (udpserver, data, length, 0,
+              (struct sockaddr *)destination, sizeof(struct sockaddr_in));
+}
+
+int hc_broadcast_receive (char *buffer, int size,
+                          struct sockaddr_in *source) {
 
     int length;
-    struct sockaddr_in srcaddr;
-    socklen_t srclength = sizeof(srcaddr);
+    socklen_t srclength = sizeof(struct sockaddr_in);
 
 
     if (udpserver < 0) return 0;
 
     length = recvfrom (udpserver, buffer, size, 0,
-		       (struct sockaddr *)&srcaddr, &srclength);
+		       (struct sockaddr *)source, &srclength);
 
-    if (length > 0) {
-        *source = srcaddr.sin_addr.s_addr;
-    }
     return length;
 }
 

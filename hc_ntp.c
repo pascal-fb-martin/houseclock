@@ -40,6 +40,7 @@
 
 #include "houseclock.h"
 #include "hc_ntp.h"
+#include "hc_clock.h"
 #include "hc_broadcast.h"
 
 #define NTP_VERSION 3
@@ -80,17 +81,31 @@ typedef struct
 // The template for all responses (the first fields never change):
 //
 ntpHeaderV3 ntpResponse = {
-    0x1c, // li=0, vn=3, mode=4.
+    0x24, // li=0, vn=4, mode=4.
     1,    // a GPS-equipped server is stratum 1.
     10,   // default poll interval recommended in rfc 5905.
     -10,  // don't expect anything better than a millisecond accuracy.
     0,
     0,
     "GPS",
-    {0, 0},
-    {0, 0},
-    {0, 0},
-    {0, 0}
+    {0, 0}, // reference.
+    {0, 0}, // origin (same as request)
+    {0, 0}, // receive.
+    {0, 0}  // transmit.
+};
+
+ntpHeaderV3 ntpBroadcast = {
+    0x25, // li=0, vn=4, mode=5.
+    1,    // a GPS-equipped server is stratum 1.
+    10,   // default poll interval recommended in rfc 5905.
+    -10,  // don't expect anything better than a millisecond accuracy.
+    0,
+    0,
+    "GPS",
+    {0, 0}, // Reference.
+    {0, 0}, // origin (always 0)
+    {0, 0}, // receive (always 0)
+    {0, 0}  // transmit.
 };
 
 static const ntpTimestamp zeroTimestamp = {0, 0};
@@ -99,8 +114,8 @@ static const ntpTimestamp zeroTimestamp = {0, 0};
 const char *hc_ntp_help (int level) {
 
     static const char *ntpHelp[] = {
-        " [-service=NAME]",
-        "-service=NAME:   name or port for the NTP socket",
+        " [-ntp-service=NAME]",
+        "-ntp-service=NAME:   name or port for the NTP socket",
         NULL
     };
 
@@ -113,7 +128,7 @@ int hc_ntp_initialize (int argc, const char **argv) {
     const char *ntpservice = "ntp";
 
     for (i = 1; i < argc; ++i) {
-        hc_match ("-service=", argv[i], &ntpservice);
+        hc_match ("-ntp-service=", argv[i], &ntpservice);
     }
     if (strcmp(ntpservice, "none") == 0) {
         return 0; // Do not act as a NTP server.
@@ -124,55 +139,97 @@ int hc_ntp_initialize (int argc, const char **argv) {
 }
 
 
-void hc_ntp_process (const struct timeval *receive,
-                         int synchronized) {
+static void hc_ntp_set_timestamp (ntpTimestamp *ntp,
+                                  const struct timeval *local) {
+    ntp->seconds = htonl((uint32_t) (local->tv_sec) + 2208988800);
+    ntp->fraction = htonl(NTP_US_TO_FRACTION(local->tv_usec));
+}
 
-    in_addr_t source;
+static void hc_ntp_set_reference (ntpHeaderV3 *packet) {
+
+    struct timeval timestamp;
+    hc_clock_reference (&timestamp);
+    hc_ntp_set_timestamp (&(packet->reference), &timestamp);
+}
+
+
+void hc_ntp_process (const struct timeval *receive, int synchronized) {
+
+    struct sockaddr_in source;
 
     // The receive buffer is as large as the max UDP packet: no overflow ever.
     char buffer[0x10000];
     int length = hc_broadcast_receive(buffer, sizeof(buffer), &source);
 
-    if (!synchronized) return; // Ignore all requests until local time is OK.
+    if (!synchronized) {
+        if (hc_debug_enabled())
+            printf ("Ignoring request from %s: not synchronized\n",
+                    hc_broadcast_format (&source));
+        return; // Ignore all requests until local time is OK.
+    }
 
     if (length >= sizeof(ntpHeaderV3)) {
         struct timeval transmit;
         ntpHeaderV3 *head = (ntpHeaderV3 *)buffer;
         int version = (head->liVnMode >> 3) & 0x7;
 
-        ntpHeaderV3 response;
-
-        if (version < 3) return;
-        if (head->liVnMode & 0x7 != 3) return;
+        switch (head->liVnMode & 0x7) {
+            case 6: return; // Control.
+            case 5: return; // Server broadcast.
+            case 4: return; // Server response.
+            case 3: break;  // request.
+            default:
+                if (hc_debug_enabled())
+                    printf ("Ignore packet from %s: version=%d, liVnMode=%d\n",
+                            hc_broadcast_format (&source),
+                            version, head->liVnMode & 0x7);
+                return;
+        }
 
         // Now we know this is a client packet with version 3 or above.
         // Build the response using the system clock, which is assumed to
         // be synchronized with the GPS clock.
 
-        ntpResponse.origin = head->origin;
-        ntpResponse.receive.seconds = (uint32_t) (receive->tv_sec);
-        ntpResponse.receive.fraction = NTP_US_TO_FRACTION(receive->tv_usec);
+        if (hc_debug_enabled())
+            printf ("Processing request from %s, transmit=%u/%08x\n",
+                    hc_broadcast_format (&source),
+                    ntohl(head->transmit.seconds),
+                    ntohl(head->transmit.fraction));
+
+
+        ntpResponse.origin = head->transmit;
+        hc_ntp_set_reference (&ntpResponse);
+        hc_ntp_set_timestamp (&ntpResponse.receive, receive);
 
         gettimeofday (&transmit, NULL);
-        ntpResponse.transmit.seconds = (uint32_t) (transmit.tv_sec);
-        ntpResponse.transmit.fraction = NTP_US_TO_FRACTION(transmit.tv_usec);
+        hc_ntp_set_timestamp (&ntpResponse.transmit, &transmit);
 
         hc_broadcast_reply
-            ((char *)&ntpResponse, sizeof(ntpResponse), source);
+            ((char *)&ntpResponse, sizeof(ntpResponse), &source);
+
+        if (hc_debug_enabled())
+            printf ("Response: origin=%u/%08x, reference=%u/%08x, "
+                              "receive=%u/%08x, transmit=%u/%08x\n",
+                ntohl(ntpResponse.origin.seconds),
+                ntohl(ntpResponse.origin.fraction),
+                ntohl(ntpResponse.reference.seconds),
+                ntohl(ntpResponse.reference.fraction),
+                ntohl(ntpResponse.receive.seconds),
+                ntohl(ntpResponse.receive.fraction),
+                ntohl(ntpResponse.transmit.seconds),
+                ntohl(ntpResponse.transmit.fraction));
     }
 }
 
 void hc_ntp_periodic (const struct timeval *wakeup) {
 
-    struct timeval transmit;
+    struct timeval timestamp;
 
-    ntpResponse.origin = zeroTimestamp;
-    ntpResponse.receive = zeroTimestamp;
+    hc_ntp_set_reference (&ntpBroadcast);
 
-    gettimeofday (&transmit, NULL);
-    ntpResponse.transmit.seconds = (uint32_t) (transmit.tv_sec);
-    ntpResponse.transmit.fraction = NTP_US_TO_FRACTION(transmit.tv_usec);
+    gettimeofday (&timestamp, NULL);
+    hc_ntp_set_timestamp (&ntpBroadcast.transmit, &timestamp);
 
-    hc_broadcast_send ((char *)&ntpResponse, sizeof(ntpResponse));
+    hc_broadcast_send ((char *)&ntpBroadcast, sizeof(ntpBroadcast));
 }
 

@@ -64,6 +64,7 @@ static const char *hc_http_status (const char *method, const char *uri,
     static hc_clock_status *clock_db = 0;
     char latitude[20];
     char longitude[20];
+    const char *date = "010100";
 
     if (nmea_db == 0) {
         nmea_db = (hc_nmea_status *) hc_http_attach (HC_NMEA_STATUS);
@@ -102,20 +103,18 @@ static const char *hc_http_status (const char *method, const char *uri,
                          nmea_db->longitude, nmea_db->hemisphere[1]);
     }
 
+    if (nmea_db->date[0] > 0) date = nmea_db->date;
+
     snprintf (JsonBuffer, sizeof(JsonBuffer),
               "{\"gps\":{\"fix\":%s"
-              ",\"time\":[%c%c,%c%c,%c%c],\"date\":[%d,%c%c,%c%c]"
+              ",\"time\":\"%s\",\"date\":\"%4d%2.2s%2.2s\""
               ",\"latitude\":%s,\"longitude\":%s}"
               ",\"clock\":{\"synchronized\":%s"
               ",\"precision\":%d,\"drift\":%d,\"timestamp\":%zd.%03d}"
               ",\"learn\":{\"count\":%d,\"accumulator\":%d}}",
               nmea_db->fix?"true":"false",
-              nmea_db->time[0], nmea_db->time[1],
-              nmea_db->time[2], nmea_db->time[3],
-              nmea_db->time[4], nmea_db->time[5],
-              2000 + (nmea_db->date[4]-'0')*10 + (nmea_db->date[5]-'0'),
-              nmea_db->date[2], nmea_db->date[3],
-              nmea_db->date[0], nmea_db->date[1],
+              nmea_db->time,
+              2000 + (date[4]-'0')*10 + (date[5]-'0'), date+2, date,
               latitude, longitude,
               clock_db->synchronized?"true":"false",
               clock_db->precision,
@@ -158,6 +157,10 @@ static const char *hc_http_clockdrift (const char *method, const char *uri,
     snprintf (p, room, "%s", "]}}");
     echttp_content_type_json();
     return JsonBuffer;
+}
+
+const char *hc_http_help (int level) {
+    return echttp_help(level);
 }
 
 void hc_http (int argc, const char **argv) {

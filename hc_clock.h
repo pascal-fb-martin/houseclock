@@ -26,6 +26,7 @@ void hc_clock_initialize   (int argc, const char **argv);
 void hc_clock_synchronize  (const struct timeval *gps,
                             const struct timeval *local, int latency);
 int  hc_clock_synchronized (void);
+void hc_clock_reference    (struct timeval *reference);
 
 /* Live database.
  */

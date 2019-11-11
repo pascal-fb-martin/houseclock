@@ -155,10 +155,10 @@ const char *hc_nmea_help (int level) {
 
     static const char *nmeaHelp[] = {
         " [-gps=DEV] [-latency=N] [-burst] [-privacy]",
-        "-gps=DEV:     TTY device from which to read the NMEA data.\n"
-        "-latency=N:   delay between the GPS fix and the 1st NMEA sentence.\n"
-        "-show-nmea:   trace NMEA sentences.\n"
-        "-burst:       Use burst start as the GPS timing reference\n"
+        "-gps=DEV:     TTY device from which to read the NMEA data.",
+        "-latency=N:   delay between the GPS fix and the 1st NMEA sentence.",
+        "-show-nmea:   trace NMEA sentences.",
+        "-burst:       Use burst start as the GPS timing reference",
         "-privacy:     do not export location",
         NULL
     };

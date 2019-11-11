@@ -65,6 +65,7 @@ static int clockPrecision;
 static int clockShowDrift = 0;
 
 static int clockSynchronized = 0;
+static struct timeval clockReference = {0, 0};
 
 static hc_clock_status *hc_clock_status_db = 0;
 static int *hc_clock_drift_db = 0;
@@ -122,7 +123,7 @@ void hc_clock_initialize (int argc, const char **argv) {
 }
 
 static void hc_clock_force (const struct timeval *gps,
-                            const struct timeval *local) {
+                            const struct timeval *local, int latency) {
 
     struct timeval now;
     struct timeval corrected = *gps;
@@ -133,7 +134,7 @@ static void hc_clock_force (const struct timeval *gps,
     // current time, as estimated using the local clock.
     //
     corrected.tv_sec += (now.tv_sec - local->tv_sec);
-    corrected.tv_usec += (now.tv_usec - local->tv_usec);
+    corrected.tv_usec += (now.tv_usec - local->tv_usec) + (latency * 1000);
     if (corrected.tv_usec > 1000000) {
         corrected.tv_sec += 1;
         corrected.tv_usec -= 1000000;
@@ -149,6 +150,7 @@ static void hc_clock_force (const struct timeval *gps,
     if (settimeofday (&corrected, NULL) != 0) {
         printf ("settimeofday() error %d\n", errno);
     }
+    clockReference = now;
 }
 
 static void hc_clock_adjust (time_t drift) {
@@ -160,10 +162,13 @@ static void hc_clock_adjust (time_t drift) {
     if (adjtime (&delta, NULL) != 0) {
         printf ("adjtime() error %d\n", errno);
     }
+    gettimeofday (&clockReference, NULL);
 }
 
 void hc_clock_synchronize(const struct timeval *gps,
                           const struct timeval *local, int latency) {
+
+    static int FirstCall = 1;
 
     if (hc_clock_drift_db == 0) return;
     if (hc_clock_status_db == 0) return;
@@ -179,13 +184,21 @@ void hc_clock_synchronize(const struct timeval *gps,
 
     if (clockShowDrift || hc_test_mode()) {
         printf ("[%d] %8.3f\n", local->tv_sec%120, drift/1000.0);
-        if (hc_test_mode()) return;
+        if (hc_test_mode()) {
+            if (absdrift < clockPrecision) {
+                clockSynchronized = hc_clock_status_db->synchronized = 1;
+            } else {
+                clockSynchronized = hc_clock_status_db->synchronized = 0;
+            }
+            return;
+        }
     }
 
-    if (absdrift >= 10000) {
+    if (FirstCall || absdrift >= 10000) {
         // Too much of a difference: force system time.
-        hc_clock_force (gps, local);
+        hc_clock_force (gps, local, latency);
         hc_clock_start_learning();
+        FirstCall = 0;
         return;
     }
 
@@ -205,8 +218,7 @@ void hc_clock_synchronize(const struct timeval *gps,
         printf ("Average drift: %d ms\n", drift);
 
     if (absdrift < clockPrecision) {
-        clockSynchronized = 1;
-        hc_clock_status_db->synchronized = 1;
+        clockSynchronized = hc_clock_status_db->synchronized = 1;
     } else {
         // GPS and local system time have drifted apart
         // by a small difference: adjust the time progressively.
@@ -223,5 +235,9 @@ void hc_clock_synchronize(const struct timeval *gps,
 
 int hc_clock_synchronized (void) {
     return clockSynchronized;
+}
+
+void hc_clock_reference (struct timeval *reference) {
+    *reference = clockReference;
 }
 

@@ -88,7 +88,8 @@ static void hc_help (const char *argv0) {
     int i = 1;
     const char *help;
 
-    printf ("%s [-h] [-debug] [-test] [-period=N]%s\n", argv0, hc_ntp_help(0));
+    printf ("%s [-h] [-debug] [-test] [-period=N]%s%s%s\n",
+            argv0, hc_ntp_help(0), hc_nmea_help(0), hc_http_help(0));
 
     printf ("\nGeneral options:\n");
     printf ("   -h:              print this help.\n");
@@ -103,10 +104,17 @@ static void hc_help (const char *argv0) {
         printf ("   %s\n", help);
         help = hc_ntp_help(++i);
     }
-    help = hc_ntp_help(i=1);
+    printf ("\nGPS options:\n");
+    help = hc_nmea_help(i=1);
     while (help) {
         printf ("   %s\n", help);
         help = hc_nmea_help(++i);
+    }
+    printf ("\nHTTP options:\n");
+    help = hc_http_help(i=1);
+    while (help) {
+        printf ("   %s\n", help);
+        help = hc_http_help(++i);
     }
     exit (0);
 }
