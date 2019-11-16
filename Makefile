@@ -22,3 +22,9 @@ clean:
 houseclock: $(OBJS)
 	gcc -g -O -o houseclock $(OBJS) -lechttp -lrt
 
+install:
+	mkdir -p /usr/local/bin
+	cp houseclock /usr/local/bin
+	chown root:root /usr/local/bin/houseclock
+	chmod 755 /usr/local/bin/houseclock
+

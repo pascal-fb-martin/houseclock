@@ -36,7 +36,9 @@ void hc_clock_reference    (struct timeval *reference);
 
 typedef struct {
     struct timeval timestamp;
+    struct timeval reference;
     int   drift;
+    int   avgdrift;
     short precision;
     char  synchronized;
     char  count;

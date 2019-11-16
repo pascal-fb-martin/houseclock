@@ -38,6 +38,7 @@
 #include "hc_db.h"
 #include "hc_nmea.h"
 #include "hc_clock.h"
+#include "hc_ntp.h"
 #include "hc_http.h"
 
 #include "echttp.h"
@@ -45,6 +46,8 @@
 
 static pid_t parent;
 
+
+static hc_nmea_status *nmea_db = 0;
 
 static char JsonBuffer[8192];
 
@@ -54,17 +57,14 @@ static void hc_background (int fd, int mode) {
 
 static void *hc_http_attach (const char *name) {
     void *p = hc_db_get (name);
-    if (p == 0) echttp_error (503, "Service Temporarily Unavailable");
+    if (p == 0) {
+        fprintf (stderr, "Cannot attach to %s\n", name);
+        echttp_error (503, "Service Temporarily Unavailable");
+    }
     return p;
 }
 
-static const char *hc_http_status (const char *method, const char *uri,
-                                   const char *data, int length) {
-    static hc_nmea_status *nmea_db = 0;
-    static hc_clock_status *clock_db = 0;
-    char latitude[20];
-    char longitude[20];
-    const char *date = "010100";
+static void *hc_http_attach_nmea (void) {
 
     if (nmea_db == 0) {
         nmea_db = (hc_nmea_status *) hc_http_attach (HC_NMEA_STATUS);
@@ -76,6 +76,18 @@ static const char *hc_http_status (const char *method, const char *uri,
             exit (1);
         }
     }
+}
+
+static const char *hc_http_status (const char *method, const char *uri,
+                                   const char *data, int length) {
+    static hc_clock_status *clock_db = 0;
+    static hc_ntp_status *ntp_db = 0;
+
+    char latitude[20];
+    char longitude[20];
+    const char *date = "010100";
+
+    hc_http_attach_nmea();
 
     if (clock_db == 0) {
         clock_db = (hc_clock_status *) hc_http_attach (HC_CLOCK_STATUS);
@@ -84,6 +96,17 @@ static const char *hc_http_status (const char *method, const char *uri,
             || hc_db_get_size (HC_CLOCK_STATUS) != sizeof(hc_clock_status)) {
             fprintf (stderr, "wrong data structure for table %s\n",
                      HC_CLOCK_STATUS);
+            exit (1);
+        }
+    }
+
+    if (ntp_db == 0) {
+        ntp_db = (hc_ntp_status *) hc_http_attach (HC_NTP_STATUS);
+        if (ntp_db == 0) return "";
+        if (hc_db_get_count (HC_NTP_STATUS) != 1
+            || hc_db_get_size (HC_NTP_STATUS) != sizeof(hc_ntp_status)) {
+            fprintf (stderr, "wrong data structure for table %s\n",
+                     HC_NTP_STATUS);
             exit (1);
         }
     }
@@ -103,25 +126,71 @@ static const char *hc_http_status (const char *method, const char *uri,
                          nmea_db->longitude, nmea_db->hemisphere[1]);
     }
 
-    if (nmea_db->date[0] > 0) date = nmea_db->date;
+    if (nmea_db->gpsdate[0] > 0) date = nmea_db->gpsdate;
 
     snprintf (JsonBuffer, sizeof(JsonBuffer),
-              "{\"gps\":{\"fix\":%s"
-              ",\"time\":\"%s\",\"date\":\"%4d%2.2s%2.2s\""
+              "{\"gps\":{\"fix\":%s, \"fixtime\":%u"
+              ",\"gpstime\":\"%s\",\"gpsdate\":\"%4d%2.2s%2.2s\""
               ",\"latitude\":%s,\"longitude\":%s}"
-              ",\"clock\":{\"synchronized\":%s"
-              ",\"precision\":%d,\"drift\":%d,\"timestamp\":%zd.%03d}"
-              ",\"learn\":{\"count\":%d,\"accumulator\":%d}}",
+              ",\"clock\":{\"synchronized\":%s,\"reference\":%zd.%03d"
+              ",\"precision\":%d,\"drift\":%d,\"avgdrift\":%d"
+              ",\"timestamp\":%zd.%03d}"
+              ",\"learn\":{\"count\":%d,\"accumulator\":%d}"
+              ",\"ntp\":{\"mode\":\"%c\",\"received\":%d,\"processed\":%d"
+              ",\"broadcast\":%d}}",
               nmea_db->fix?"true":"false",
-              nmea_db->time,
+              (unsigned int)nmea_db->fixtime,
+              nmea_db->gpstime,
               2000 + (date[4]-'0')*10 + (date[5]-'0'), date+2, date,
               latitude, longitude,
               clock_db->synchronized?"true":"false",
+              (size_t)clock_db->reference.tv_sec,
+              clock_db->reference.tv_usec/1000,
               clock_db->precision,
               clock_db->drift,
+              clock_db->avgdrift,
               (size_t) (clock_db->timestamp.tv_sec),
               clock_db->timestamp.tv_usec/1000,
-              clock_db->count, clock_db->accumulator);
+              clock_db->count, clock_db->accumulator,
+              ntp_db->mode,
+              ntp_db->latest.received,
+              ntp_db->latest.client,
+              ntp_db->latest.broadcast);
+
+    echttp_content_type_json();
+    return JsonBuffer;
+}
+
+static const char *hc_http_gps (const char *method, const char *uri,
+                                const char *data, int length) {
+    const char *prefix = "";
+    int i;
+    char buffer[1024];
+
+    hc_http_attach_nmea();
+
+    strncpy (JsonBuffer, "{\"text\":[\"", sizeof(JsonBuffer));
+    for (i = 0; i < nmea_db->textcount; ++i) {
+        strcat (JsonBuffer, prefix);
+        strcat (JsonBuffer, nmea_db->text[i].line);
+        prefix = "\",\"";
+    }
+    strcat (JsonBuffer, "\"]");
+
+    prefix = ",\"history\":[{\"sentence\":\"";
+    for (i = 0; i < HC_NMEA_DEPTH; ++i) {
+        gpsSentence *item = nmea_db->history + i;
+        if (item->timing.tv_sec == 0) continue;
+        snprintf (buffer, sizeof(buffer),
+                  "%s%s\",\"timestamp\":[%u,%d],\"flags\":%d}",
+                  prefix,
+                  item->sentence,
+                  item->timing.tv_sec, item->timing.tv_usec / 1000,
+                  item->flags);
+        strcat (JsonBuffer, buffer);
+        prefix = ",{\"sentence\":\"";
+    }
+    strcat (JsonBuffer, "]}");
 
     echttp_content_type_json();
     return JsonBuffer;
@@ -169,6 +238,7 @@ void hc_http (int argc, const char **argv) {
 
     echttp_route_uri ("/status", hc_http_status);
     echttp_route_uri ("/clock/drift", hc_http_clockdrift);
+    echttp_route_uri ("/gps", hc_http_gps);
     echttp_static_route ("/ui", "/usr/local/lib/houseclock/public");
     echttp_background (&hc_background);
     echttp_loop();

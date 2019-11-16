@@ -22,21 +22,39 @@
  */
 const char *hc_nmea_help (int level);
 
-int hc_nmea_initialize (int argc, const char **argv);
-int hc_nmea_process (const struct timeval *received);
+int  hc_nmea_initialize (int argc, const char **argv);
+int  hc_nmea_process (const struct timeval *received);
+void hc_nmea_periodic (const struct timeval *now);
+int  hc_nmea_active (void);
 
 /* The GPS database:
  */
 #define HC_NMEA_STATUS "GpsStatus"
+#define HC_NMEA_TEXT_LINES 16
+#define HC_NMEA_DEPTH 32
+#define HC_NMEA_MAX_SENTENCE 81 // NMEA sentence is no more than 80 characters.
 
 typedef struct {
-    char fix;
-    char time[20];
-    char date[20];
-    char latitude[20];
-    char longitude[20];
-    char hemisphere[2];
+    char sentence[HC_NMEA_MAX_SENTENCE];
+    char flags;
+    struct timeval timing;
+} gpsSentence;
+
+typedef struct {
+    char   fix;
+    time_t fixtime;
+    char   gpstime[20];
+    char   gpsdate[20];
+    char   latitude[20];
+    char   longitude[20];
+    char   hemisphere[2];
     struct timeval timestamp;
+    struct {
+        char line[HC_NMEA_MAX_SENTENCE];
+    } text[HC_NMEA_TEXT_LINES];
+    int textcount;
+    gpsSentence history[HC_NMEA_DEPTH];
+    int gpscount;
 } hc_nmea_status;
 
 void hc_nmea_convert (char *buffer, int size,

@@ -33,7 +33,7 @@
  *    Send a data packet in broadcast mode.
  *
  * void hc_broadcast_reply (const char *data, int length,
- *                          in_addr_t destination)
+ *                          const struct sockaddr_in *destination)
  *
  *    Send a response packet to the specified unicast address.
  *
@@ -41,6 +41,12 @@
  *
  *    Get the data and source address of a received packet.
  *    Returns the length of the data, or -1.
+ *
+ * const char *hc_broadcast_format (const struct sockaddr_in *addr);
+ *
+ *    Get a string representation of the network address. This
+ *    returns a string to a static buffer: the value is erased
+ *    on each call.
  *
  * LIMITATIONS:
  *
@@ -145,7 +151,7 @@ void hc_broadcast_send (const char *data, int length) {
 }
 
 
-const char *hc_broadcast_format (struct sockaddr_in *addr) {
+const char *hc_broadcast_format (const struct sockaddr_in *addr) {
     static char formatted[80];
     snprintf (formatted, sizeof(formatted), "%d.%d.%d.%d:%d",
               addr->sin_addr.s_addr & 0xff,
@@ -157,7 +163,7 @@ const char *hc_broadcast_format (struct sockaddr_in *addr) {
 }
 
 void hc_broadcast_reply
-        (const char *data, int length, struct sockaddr_in *destination) {
+        (const char *data, int length, const struct sockaddr_in *destination) {
 
     if (udpserver < 0) return;
 

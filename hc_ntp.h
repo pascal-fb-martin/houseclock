@@ -24,6 +24,34 @@
 const char *hc_ntp_help (int level);
 
 int  hc_ntp_initialize (int argc, const char **argv);
-void hc_ntp_process    (const struct timeval *receive, int synchronized);
+void hc_ntp_process    (const struct timeval *receive);
 void hc_ntp_periodic   (const struct timeval *now);
+
+#define HC_NTP_DEPTH 60
+#define HC_NTP_POOL  4
+#define HC_NTP_STATUS "NtpStatus"
+
+struct hc_ntp_traffic {
+    int received;
+    int client;
+    int broadcast;
+    time_t timestamp;
+};
+
+struct hc_ntp_server {
+    struct timeval origin;
+    struct timeval local;
+    int    count;
+    char   name[48];
+};
+
+typedef struct {
+    char mode;
+    char source;
+    struct hc_ntp_server  pool[HC_NTP_POOL];
+
+    struct hc_ntp_traffic live;
+    struct hc_ntp_traffic latest;
+    struct hc_ntp_traffic history[HC_NTP_DEPTH];
+} hc_ntp_status;
 

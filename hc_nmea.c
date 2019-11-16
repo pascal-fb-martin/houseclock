@@ -82,6 +82,15 @@
  *    Called when new data is available, with the best know receive time,
  *    typically when the application was notified that data is available.
  *    This time will be associated with the last received byte.
+ *
+ * void hc_nmea_periodic (const struct timeval *now);
+ *
+ *    This function must be called at regular interval. It is used to detect
+ *    stale NMEA and GPS data.
+ *
+ * void hc_nmea_active (void);
+ *
+ *    True if there is an active GPS unit accessible.
  */
 
 /* NMEA sentences:
@@ -124,30 +133,23 @@ static int gpsLatency;
 static char gpsBuffer[2048]; // 2 seconds of NMEA data, even in worst case.
 static int  gpsCount = 0;    // How much NMEA data is stored.
 
-typedef struct {
-    char sentence[81]; // NMEA sentence is no more than 80 characters.
-    char flags;
-    struct timeval timing;
-} gpsSentence;
-
 #define GPSFLAGS_NEWFIX    1
 #define GPSFLAGS_NEWBURST  2
 
-#define GPS_DEPTH 32
-
-static gpsSentence gpsHistory[GPS_DEPTH];
-static int gpsLatest = 0;
+#define GPS_EXPIRES 5
 
 // Memorize the latest NMEA values to detect changes.
 static char gpsDate[20];
 static char gpsTime[20];
 
 static const char *gpsDevice = "/dev/ttyACM0";
-static int gpsTty = 0;
+static int gpsTty = -1;
 
 static int gpsUseBurst = 0;
 static int gpsPrivacy = 0;
 static int gpsShowNmea = 0;
+
+static time_t gpsInitialized = 0;
 
 static hc_nmea_status *hc_nmea_status_db = 0;
 
@@ -155,8 +157,8 @@ const char *hc_nmea_help (int level) {
 
     static const char *nmeaHelp[] = {
         " [-gps=DEV] [-latency=N] [-burst] [-privacy]",
-        "-gps=DEV:     TTY device from which to read the NMEA data.",
-        "-latency=N:   delay between the GPS fix and the 1st NMEA sentence.",
+        "-gps=DEV:     device from which to read the NMEA data (/dev/ttyACM0).",
+        "-latency=N:   delay between the GPS fix and the 1st NMEA sentence (70).",
         "-show-nmea:   trace NMEA sentences.",
         "-burst:       Use burst start as the GPS timing reference",
         "-privacy:     do not export location",
@@ -166,17 +168,20 @@ const char *hc_nmea_help (int level) {
 }
 
 static void hc_nmea_reset (void) {
-    gpsCount = 0;
-    gpsLatest = GPS_DEPTH-1;
+
     int i;
-    for (i = 0; i < GPS_DEPTH; ++i) {
-        gpsHistory[i].sentence[0] = 0;
-    }
-    hc_nmea_status_db->date[0] = 0;
-    hc_nmea_status_db->time[0] = 0;
+    gpsCount = 0;
+    hc_nmea_status_db->fix = 0;
+    hc_nmea_status_db->fixtime = 0;
+    hc_nmea_status_db->gpsdate[0] = 0;
+    hc_nmea_status_db->gpstime[0] = 0;
     hc_nmea_status_db->latitude[0] = 0;
     hc_nmea_status_db->longitude[0] = 0;
-    gpsTty = 0;
+    hc_nmea_status_db->textcount = 0;
+    hc_nmea_status_db->gpscount = 0;
+
+    if (gpsTty >= 0) close(gpsTty);
+    gpsTty = -1;
 }
 
 int hc_nmea_initialize (int argc, const char **argv) {
@@ -196,17 +201,20 @@ int hc_nmea_initialize (int argc, const char **argv) {
     }
     gpsLatency = atoi(latency_option);
 
-    i = hc_db_new (HC_NMEA_STATUS, sizeof(hc_nmea_status), 1);
-    if (i != 0) {
-        fprintf (stderr, "cannot create %s: %s\n", HC_NMEA_STATUS, strerror(i));
-        exit(1);
+    if (hc_nmea_status_db == 0) {
+        i = hc_db_new (HC_NMEA_STATUS, sizeof(hc_nmea_status), 1);
+        if (i != 0) {
+            fprintf (stderr,
+                     "cannot create %s: %s\n", HC_NMEA_STATUS, strerror(i));
+            exit(1);
+        }
+        hc_nmea_status_db = (hc_nmea_status *) hc_db_get (HC_NMEA_STATUS);
     }
-    hc_nmea_status_db = (hc_nmea_status *) hc_db_get (HC_NMEA_STATUS);
 
     hc_nmea_reset();
     gpsTty = open(gpsDevice, O_RDONLY);
 
-    hc_clock_initialize (argc, argv);
+    gpsInitialized = time(0);
     return gpsTty;
 }
 
@@ -278,8 +286,8 @@ static int hc_nmea_gettime (struct timeval *gmt) {
     time_t now = time(0L);
     struct tm local;
 
-    char *gpsDate = hc_nmea_status_db->date;
-    char *gpsTime = hc_nmea_status_db->time;
+    char *gpsDate = hc_nmea_status_db->gpsdate;
+    char *gpsTime = hc_nmea_status_db->gpstime;
 
     if ((gpsDate[0] == 0) || (gpsTime[0] == 0)) return 0;
 
@@ -301,10 +309,8 @@ static int hc_nmea_gettime (struct timeval *gmt) {
 static int hc_nmea_valid (const char *status, const char *integrity) {
 
     if ((*status == 'A') && (*integrity == 'A' || *integrity == 'D')) {
-        hc_nmea_status_db->fix = 1;
         return 1;
     }
-    hc_nmea_status_db->fix = 0;
     return 0;
 }
 
@@ -313,8 +319,9 @@ static void hc_nmea_record (const char *sentence,
 
     gpsSentence *decoded;
 
-    if (++gpsLatest >= GPS_DEPTH) gpsLatest = 0;
-    decoded = gpsHistory + gpsLatest;
+    if (++(hc_nmea_status_db->gpscount) >= HC_NMEA_DEPTH)
+        hc_nmea_status_db->gpscount = 0;
+    decoded = hc_nmea_status_db->history + hc_nmea_status_db->gpscount;
 
     strncpy (decoded->sentence, sentence, sizeof(decoded->sentence));
     decoded->timing = *timing;
@@ -322,7 +329,7 @@ static void hc_nmea_record (const char *sentence,
 }
 
 static void hc_nmea_mark (int flags, const struct timeval *timestamp) {
-    gpsHistory[gpsLatest].flags = flags;
+    hc_nmea_status_db->history[hc_nmea_status_db->gpscount].flags = flags;
     hc_nmea_status_db->timestamp = *timestamp;
 }
 
@@ -336,6 +343,7 @@ static void hc_nmea_store_position (char **fields) {
         hc_nmea_status_db->hemisphere[1] = fields[3][0];
     }
     hc_nmea_status_db->fix = 1;
+    hc_nmea_status_db->fixtime = time(0);
 }
 
 static int hc_nmea_decode (char *sentence) {
@@ -344,8 +352,8 @@ static int hc_nmea_decode (char *sentence) {
     int count;
     int newfix = 0;
 
-    char *gpsDate = hc_nmea_status_db->date;
-    char *gpsTime = hc_nmea_status_db->time;
+    char *gpsDate = hc_nmea_status_db->gpsdate;
+    char *gpsTime = hc_nmea_status_db->gpstime;
 
     count = hc_nmea_splitfields(sentence, fields);
 
@@ -367,8 +375,8 @@ static int hc_nmea_decode (char *sentence) {
         // GPGGA,time,lat,N|S,long,E|W,0|1|2|3|4|5|6|7|8,count,...
         if (count > 6) {
             char fix = fields[6][0];
-            int  sats = atoi(fields[8]);
-            if (fix >= 1 && fix <= 5 && sats >= 3) {
+            int  sats = atoi(fields[7]);
+            if (fix >= '1' && fix <= '5' && sats >= 3) {
                 newfix = hc_nmea_isnew(fields[1], gpsTime);
                 if (newfix) hc_nmea_store_position (fields+2);
             } else {
@@ -388,6 +396,13 @@ static int hc_nmea_decode (char *sentence) {
             }
         } else {
             DEBUG printf ("Invalid GPGLL sentence: too few fields\n");
+        }
+    } else if (strcmp ("GPTXT", fields[0]) == 0) {
+        int count = hc_nmea_status_db->textcount;
+        if (count < HC_NMEA_TEXT_LINES) {
+            strncpy (hc_nmea_status_db->text[count].line,
+                 fields[4], sizeof (hc_nmea_status_db->text[0].line));
+            hc_nmea_status_db->textcount += 1;
         }
     }
 
@@ -439,7 +454,6 @@ int hc_nmea_process (const struct timeval *received) {
 
     length = read (gpsTty, gpsBuffer+gpsCount, sizeof(gpsBuffer)-gpsCount);
     if (length <= 0) {
-        close(gpsTty);
         hc_nmea_reset();
         return -1;
     }
@@ -546,5 +560,29 @@ void hc_nmea_convert (char *buffer, int size,
     double degrees = atoi(buffer);
     double minutes = atof(source+digits);
     snprintf (buffer, size, "%f", degrees + (minutes / 60.0));
+}
+
+
+void hc_nmea_periodic (const struct timeval *now) {
+
+    // Do not check during initialization.
+    if ((gpsInitialized == 0) || (hc_nmea_status_db == 0)) return;
+    if (now->tv_sec <= gpsInitialized + GPS_EXPIRES) return;
+
+    if (now->tv_sec > hc_nmea_status_db->timestamp.tv_sec + GPS_EXPIRES) {
+        if (gpsShowNmea) {
+            printf ("GPS data expired at %u\n", (unsigned int)now->tv_sec);
+        }
+        if (gpsTty >= 0) {
+            hc_nmea_reset();
+        }
+    }
+}
+
+int hc_nmea_active (void) {
+    if (gpsTty < 0 ) return 0;
+    if (hc_nmea_status_db == 0) return 0;
+    if (hc_nmea_status_db->fixtime + GPS_EXPIRES < time(0)) return 0;
+    return 1;
 }
 

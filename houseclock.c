@@ -88,14 +88,13 @@ static void hc_help (const char *argv0) {
     int i = 1;
     const char *help;
 
-    printf ("%s [-h] [-debug] [-test] [-period=N]%s%s%s\n",
+    printf ("%s [-h] [-debug] [-test]%s%s%s\n",
             argv0, hc_ntp_help(0), hc_nmea_help(0), hc_http_help(0));
 
     printf ("\nGeneral options:\n");
     printf ("   -h:              print this help.\n");
     printf ("   -debug           prints a lot of debug traces.\n");
     printf ("   -test            prints time drift compare to GPS.\n");
-    printf ("   -period=N        how often the server advertizes itself\n");
     printf ("   -db=N            Size of the internal database, in MB\n");
 
     printf ("\nNTP options:\n");
@@ -127,10 +126,8 @@ int main (int argc, const char **argv) {
 
     int gpstty = -1;
 
-    int period;
     time_t last_period = 0;
     struct timeval now;
-    const char *periodstr = "300";
     const char *dbsizestr = "0";
 
     int i;
@@ -138,12 +135,10 @@ int main (int argc, const char **argv) {
         if (strcmp("-h", argv[i]) == 0) {
             hc_help(argv[0]);
         }
-        hc_match ("-period=", argv[i], &periodstr);
         hc_match ("-db=", argv[i], &dbsizestr);
         if (hc_present ("-debug", argv[i])) HcDebug = 1;
         if (hc_present ("-test", argv[i])) HcTest = 1;
     }
-    period = atoi(periodstr);
 
     // Start the web interface.
     hc_db_create (atoi(dbsizestr)*1024*1024);
@@ -156,14 +151,16 @@ int main (int argc, const char **argv) {
         exit (1);
     }
 
-    ntpsocket = hc_ntp_initialize (argc, argv);
-    if (!HcTest) {
-        if (ntpsocket < 0) return 1;
-        if (maxfd <= ntpsocket) maxfd = ntpsocket + 1;
-    }
+    hc_clock_initialize (argc, argv);
 
     gpstty = hc_nmea_initialize (argc, argv);
     if (maxfd <= gpstty) maxfd = gpstty + 1;
+
+    ntpsocket = hc_ntp_initialize (argc, argv);
+    if (!HcTest) {
+        if (ntpsocket < 0) return 1;
+    }
+    if (maxfd <= ntpsocket) maxfd = ntpsocket + 1;
 
 
     putenv("TZ=UTC"); // Always use UTC time.
@@ -177,12 +174,12 @@ int main (int argc, const char **argv) {
             FD_SET(ntpsocket, &readset);
         }
 
-        if (gpstty > 0) {
+        if (gpstty >= 0) {
             FD_SET(gpstty, &readset);
         }
 
         gettimeofday(&now, NULL);
-        timeout.tv_sec = period - (now.tv_sec % period);
+        timeout.tv_sec = 1;
         timeout.tv_usec = 0;
 
         count = select(maxfd+1, &readset, NULL, NULL, &timeout);
@@ -196,18 +193,20 @@ int main (int argc, const char **argv) {
             }
             if (ntpsocket) {
                 if (FD_ISSET(ntpsocket, &readset)) {
-                    hc_ntp_process (&now, hc_clock_synchronized());
+                    hc_ntp_process (&now);
                 }
             }
         }
 
-        if (now.tv_sec > (last_period + period)) {
-            if (ntpsocket) {
+        if (now.tv_sec > last_period) {
+            if (ntpsocket > 0) {
                 hc_ntp_periodic (&now);
             }
             if (gpstty < 0) {
                 gpstty = hc_nmea_initialize (argc, argv);
                 if (maxfd <= gpstty) maxfd = gpstty + 1;
+            } else {
+                hc_nmea_periodic (&now);
             }
             last_period = now.tv_sec;
         }

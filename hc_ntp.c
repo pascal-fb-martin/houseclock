@@ -18,7 +18,7 @@
  * Boston, MA  02110-1301, USA.
  *
  *
- * hc_ntp.c - The NTP server implementation.
+ * hc_ntp.c - The (S)NTP server implementation.
  *
  * SYNOPSYS:
  *
@@ -26,12 +26,10 @@
  *
  *    Initialize the NTP context. Returns a socket or -1.
  *
- * void hc_ntp_process (const struct timeval *receive, int synchronized);
+ * void hc_ntp_process (const struct timeval *receive);
  *
  *    Process one available NTP message. The receive parameter indicates
- *    when it was detected that data is available. The synchronized
- *    parameter indicates if the local system time is synchronized with
- *    the reference clock (e.g. GPS clock).
+ *    when it was detected that data is available.
  *
  * void hc_ntp_periodic (const struct timeval *now);
  *
@@ -39,7 +37,9 @@
  */
 
 #include "houseclock.h"
+#include "hc_db.h"
 #include "hc_ntp.h"
+#include "hc_nmea.h"
 #include "hc_clock.h"
 #include "hc_broadcast.h"
 
@@ -48,6 +48,7 @@
 #define NTP_FRACTION_MS 4310344
 
 #define NTP_US_TO_FRACTION(x) ((uint32_t)((x / 1000) * NTP_FRACTION_MS))
+#define NTP_US_TO_MS(x) ((uint32_t)((x * 1000) / NTP_FRACTION_MS))
 
 typedef struct {
     uint32_t seconds;
@@ -110,12 +111,17 @@ ntpHeaderV3 ntpBroadcast = {
 
 static const ntpTimestamp zeroTimestamp = {0, 0};
 
+static hc_ntp_status *hc_ntp_status_db = 0;
+
+static int hc_ntp_period;
+
 
 const char *hc_ntp_help (int level) {
 
     static const char *ntpHelp[] = {
-        " [-ntp-service=NAME]",
+        " [-ntp-service=NAME] [-ntp-period=INT]",
         "-ntp-service=NAME:   name or port for the NTP socket",
+        "-ntp-period=INT:     how often the NTP server advertises itself",
         NULL
     };
 
@@ -126,18 +132,50 @@ int hc_ntp_initialize (int argc, const char **argv) {
 
     int i;
     const char *ntpservice = "ntp";
+    const char *ntpperiod = "300";
 
     for (i = 1; i < argc; ++i) {
         hc_match ("-ntp-service=", argv[i], &ntpservice);
+        hc_match ("-ntp-period=", argv[i], &ntpperiod);
     }
     if (strcmp(ntpservice, "none") == 0) {
         return 0; // Do not act as a NTP server.
     }
+    hc_ntp_period = atoi(ntpperiod);
+    if (hc_ntp_period < 10) hc_ntp_period = 10;
+
+    i = hc_db_new (HC_NTP_STATUS, sizeof(hc_ntp_status), 1);
+    if (i != 0) {
+        fprintf (stderr, "cannot create %s: %s\n", HC_NTP_STATUS, strerror(i));
+        exit (1);
+    }
+    hc_ntp_status_db = (hc_ntp_status *) hc_db_get (HC_NTP_STATUS);
+    hc_ntp_status_db->live.received = 0;
+    hc_ntp_status_db->live.client = 0;
+    hc_ntp_status_db->live.broadcast = 0;
+    hc_ntp_status_db->live.timestamp = 0;
+    for (i = 0; i < HC_NTP_DEPTH; ++i) {
+        hc_ntp_status_db->history[i].received = 0;
+        hc_ntp_status_db->history[i].client = 0;
+        hc_ntp_status_db->history[i].broadcast = 0;
+        hc_ntp_status_db->history[i].timestamp = 0;
+    }
+    for (i = 0; i < HC_NTP_POOL; ++i) {
+        hc_ntp_status_db->pool[i].local.tv_sec = 0;
+    }
+    hc_ntp_status_db->source = -1;
+
     if (hc_test_mode()) return -1;
 
     return hc_broadcast_open (ntpservice);
 }
 
+
+static void hc_ntp_get_timestamp (struct timeval *local,
+                                  const ntpTimestamp *ntp) {
+    local->tv_sec = ntohl(ntp->seconds) - 2208988800;
+    local->tv_usec = NTP_US_TO_MS(ntohl(ntp->fraction));
+}
 
 static void hc_ntp_set_timestamp (ntpTimestamp *ntp,
                                   const struct timeval *local) {
@@ -153,7 +191,114 @@ static void hc_ntp_set_reference (ntpHeaderV3 *packet) {
 }
 
 
-void hc_ntp_process (const struct timeval *receive, int synchronized) {
+static void hc_ntp_broadcast (const ntpHeaderV3 *head,
+                              const struct sockaddr_in *source,
+                              const struct timeval *receive) {
+
+    int i, next;
+    time_t death = receive->tv_sec - (hc_ntp_period * 3);
+    const char *name = hc_broadcast_format(source);
+
+    hc_ntp_status_db->live.broadcast += 1;
+
+    // Search if that broadcasting server is already known.
+    //
+    next = -1;
+    for (i = 0; i < HC_NTP_POOL; ++i) {
+        if (strcmp (name, hc_ntp_status_db->pool[i].name) == 0) break;
+        if (hc_ntp_status_db->pool[i].local.tv_sec < death) {
+            // Forget a time server that stopped talking.
+            if (i == hc_ntp_status_db->source) {
+                hc_ntp_status_db->source = -1;
+            }
+            if (next < 0) next = i; // Good slot for a new server.
+        }
+    }
+
+    // Make sure we do not keep following a time server that died,
+    // even if last on the list.
+    //
+    if (hc_ntp_status_db->source >= 0) {
+        int source = hc_ntp_status_db->source;
+        if (source != i) {
+            if (hc_ntp_status_db->pool[source].local.tv_sec < death) {
+                hc_ntp_status_db->source = -1;
+                if (next < 0) next = source; // Good slot for a new server.
+            }
+        }
+    }
+
+    // If not known yet it goes to an empty slot, or replaces a dead server.
+    //
+    if (i >= HC_NTP_POOL) {
+        if (next < 0) return; // Too many active servers to choose from.
+        i = next;
+        strncpy (hc_ntp_status_db->pool[i].name,
+                 name, sizeof(hc_ntp_status_db->pool[0].name));
+    }
+
+    // Store the latest time information.
+    //
+    hc_ntp_status_db->pool[i].local = *receive;
+    hc_ntp_get_timestamp
+         (&(hc_ntp_status_db->pool[i].origin), &(head->transmit));
+
+    // Elect a time source.
+    //
+    if (hc_ntp_status_db->source < 0) {
+        hc_ntp_status_db->source = i;
+    }
+
+    // Synchronize our time on the elected time source.
+    //
+    if (i == hc_ntp_status_db->source) {
+        hc_clock_synchronize (&(hc_ntp_status_db->pool[i].origin), receive, 0);
+    }
+}
+
+static void hc_ntp_request (const ntpHeaderV3 *head,
+                            const struct sockaddr_in *source,
+                            const struct timeval *receive) {
+
+    // Build the response using the local system clock, if it has been
+    // synchronized with the GPS clock.
+
+    struct timeval transmit;
+
+    if (!hc_clock_synchronized()) {
+        if (hc_debug_enabled())
+            printf ("Ignoring request from %s: not synchronized\n",
+                    hc_broadcast_format (source));
+        return; // Ignore all requests until local time is OK.
+    }
+
+    hc_ntp_status_db->live.client += 1;
+
+    ntpResponse.origin = head->transmit;
+    hc_ntp_set_reference (&ntpResponse);
+    hc_ntp_set_timestamp (&ntpResponse.receive, receive);
+
+    gettimeofday (&transmit, NULL);
+    hc_ntp_set_timestamp (&ntpResponse.transmit, &transmit);
+
+    hc_broadcast_reply ((char *)&ntpResponse, sizeof(ntpResponse), source);
+
+    if (hc_debug_enabled())
+        printf ("Response to %s: origin=%u/%08x, reference=%u/%08x, "
+                          "receive=%u/%08x, transmit=%u/%08x\n",
+            hc_broadcast_format (source),
+            ntohl(ntpResponse.origin.seconds),
+            ntohl(ntpResponse.origin.fraction),
+            ntohl(ntpResponse.reference.seconds),
+            ntohl(ntpResponse.reference.fraction),
+            ntohl(ntpResponse.receive.seconds),
+            ntohl(ntpResponse.receive.fraction),
+            ntohl(ntpResponse.transmit.seconds),
+            ntohl(ntpResponse.transmit.fraction));
+}
+
+
+void hc_ntp_process (const struct timeval *receive) {
 
     struct sockaddr_in source;
 
@@ -161,75 +306,68 @@ void hc_ntp_process (const struct timeval *receive, int synchronized) {
     char buffer[0x10000];
     int length = hc_broadcast_receive(buffer, sizeof(buffer), &source);
 
-    if (!synchronized) {
-        if (hc_debug_enabled())
-            printf ("Ignoring request from %s: not synchronized\n",
-                    hc_broadcast_format (&source));
-        return; // Ignore all requests until local time is OK.
-    }
+    hc_ntp_status_db->live.received += 1;
 
     if (length >= sizeof(ntpHeaderV3)) {
-        struct timeval transmit;
         ntpHeaderV3 *head = (ntpHeaderV3 *)buffer;
         int version = (head->liVnMode >> 3) & 0x7;
 
         switch (head->liVnMode & 0x7) {
-            case 6: return; // Control.
-            case 5: return; // Server broadcast.
-            case 4: return; // Server response.
-            case 3: break;  // request.
+            case 6: break; // Control.
+            case 5: // Server broadcast.
+                if (! hc_nmea_active()) {
+                    hc_ntp_broadcast(head, &source, receive);
+                }
+                break;
+            case 4: break; // Server response.
+            case 3: // Client request.
+                if (hc_nmea_active()) {
+                    hc_ntp_request (head, &source, receive);
+                }
+                break;
             default:
                 if (hc_debug_enabled())
-                    printf ("Ignore packet from %s: version=%d, liVnMode=%d\n",
+                    printf ("Ignore packet from %s: version=%d, mode=%d\n",
                             hc_broadcast_format (&source),
                             version, head->liVnMode & 0x7);
-                return;
+                break;
         }
-
-        // Now we know this is a client packet with version 3 or above.
-        // Build the response using the system clock, which is assumed to
-        // be synchronized with the GPS clock.
-
-        if (hc_debug_enabled())
-            printf ("Processing request from %s, transmit=%u/%08x\n",
-                    hc_broadcast_format (&source),
-                    ntohl(head->transmit.seconds),
-                    ntohl(head->transmit.fraction));
-
-
-        ntpResponse.origin = head->transmit;
-        hc_ntp_set_reference (&ntpResponse);
-        hc_ntp_set_timestamp (&ntpResponse.receive, receive);
-
-        gettimeofday (&transmit, NULL);
-        hc_ntp_set_timestamp (&ntpResponse.transmit, &transmit);
-
-        hc_broadcast_reply
-            ((char *)&ntpResponse, sizeof(ntpResponse), &source);
-
-        if (hc_debug_enabled())
-            printf ("Response: origin=%u/%08x, reference=%u/%08x, "
-                              "receive=%u/%08x, transmit=%u/%08x\n",
-                ntohl(ntpResponse.origin.seconds),
-                ntohl(ntpResponse.origin.fraction),
-                ntohl(ntpResponse.reference.seconds),
-                ntohl(ntpResponse.reference.fraction),
-                ntohl(ntpResponse.receive.seconds),
-                ntohl(ntpResponse.receive.fraction),
-                ntohl(ntpResponse.transmit.seconds),
-                ntohl(ntpResponse.transmit.fraction));
     }
 }
 
 void hc_ntp_periodic (const struct timeval *wakeup) {
 
-    struct timeval timestamp;
+    static time_t latestPeriod = 0;
+    static time_t latestBroadcast = 0;
 
-    hc_ntp_set_reference (&ntpBroadcast);
+    if (latestPeriod == 0) {
+        latestPeriod = wakeup->tv_sec / 10;
+    } else if (wakeup->tv_sec / 10 > latestPeriod) {
+        int slot = latestPeriod % HC_NTP_DEPTH;
+        hc_ntp_status_db->live.timestamp = latestPeriod * 10;
+        hc_ntp_status_db->latest = hc_ntp_status_db->live;
+        hc_ntp_status_db->history[slot] = hc_ntp_status_db->live;
+        latestPeriod += 1;
+    }
 
-    gettimeofday (&timestamp, NULL);
-    hc_ntp_set_timestamp (&ntpBroadcast.transmit, &timestamp);
+    if (hc_nmea_active()) {
+        if (hc_clock_synchronized() &&
+            (wakeup->tv_sec > latestBroadcast + hc_ntp_period)) {
 
-    hc_broadcast_send ((char *)&ntpBroadcast, sizeof(ntpBroadcast));
+            struct timeval timestamp;
+
+            hc_ntp_set_reference (&ntpBroadcast);
+
+            gettimeofday (&timestamp, NULL);
+            hc_ntp_set_timestamp (&ntpBroadcast.transmit, &timestamp);
+
+            hc_broadcast_send ((char *)&ntpBroadcast, sizeof(ntpBroadcast));
+            latestBroadcast = wakeup->tv_sec;
+            hc_ntp_status_db->live.broadcast += 1;
+        }
+        hc_ntp_status_db->mode = 'S';
+    } else {
+        hc_ntp_status_db->mode = 'C';
+    }
 }
 

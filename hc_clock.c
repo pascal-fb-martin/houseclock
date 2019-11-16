@@ -61,14 +61,11 @@
 
 #define HC_CLOCK_LEARNING_PERIOD 10
 
-static int clockPrecision;
 static int clockShowDrift = 0;
-
-static int clockSynchronized = 0;
-static struct timeval clockReference = {0, 0};
 
 static hc_clock_status *hc_clock_status_db = 0;
 static int *hc_clock_drift_db = 0;
+
 
 const char *hc_clock_help (int level) {
 
@@ -89,6 +86,7 @@ static void hc_clock_start_learning (void) {
 void hc_clock_initialize (int argc, const char **argv) {
 
     int i;
+    int precision;
     const char *precision_option = "10"; // ms
 
     clockShowDrift = 0;
@@ -97,9 +95,7 @@ void hc_clock_initialize (int argc, const char **argv) {
         hc_match ("-precision=", argv[i], &precision_option);
         clockShowDrift |= hc_present ("-drift", argv[i]);
     }
-    clockPrecision = atoi(precision_option);
-
-    clockSynchronized = 0;
+    precision = atoi(precision_option);
 
     i = hc_db_new (HC_CLOCK_DRIFT, sizeof(int), 120);
     if (i != 0) {
@@ -117,7 +113,7 @@ void hc_clock_initialize (int argc, const char **argv) {
     }
     hc_clock_status_db = (hc_clock_status *)hc_db_get (HC_CLOCK_STATUS);
     hc_clock_status_db->synchronized = 0;
-    hc_clock_status_db->precision = clockPrecision;
+    hc_clock_status_db->precision = precision;
     hc_clock_status_db->drift = 0;
     hc_clock_start_learning ();
 }
@@ -130,8 +126,8 @@ static void hc_clock_force (const struct timeval *gps,
 
     gettimeofday (&now, NULL);
 
-    // Correct the GPS time from the time of the fix to this
-    // current time, as estimated using the local clock.
+    // Correct the GPS time from the time of the fix (local) to
+    // the current time (now), as estimated using the local clock.
     //
     corrected.tv_sec += (now.tv_sec - local->tv_sec);
     corrected.tv_usec += (now.tv_usec - local->tv_usec) + (latency * 1000);
@@ -144,13 +140,14 @@ static void hc_clock_force (const struct timeval *gps,
     }
 
     DEBUG {
-        printf ("Forcing time to %ld.%03.3d seconds\n",
+        printf ("Forcing time from %ld.%03.3d to %ld.%03.3d seconds\n",
+                (long)(now.tv_sec), (int)(now.tv_usec/1000),
                 (long)(corrected.tv_sec), (int)(corrected.tv_usec/1000));
     }
     if (settimeofday (&corrected, NULL) != 0) {
         printf ("settimeofday() error %d\n", errno);
     }
-    clockReference = now;
+    hc_clock_status_db->reference = corrected;
 }
 
 static void hc_clock_adjust (time_t drift) {
@@ -162,7 +159,7 @@ static void hc_clock_adjust (time_t drift) {
     if (adjtime (&delta, NULL) != 0) {
         printf ("adjtime() error %d\n", errno);
     }
-    gettimeofday (&clockReference, NULL);
+    gettimeofday (&hc_clock_status_db->reference, NULL);
 }
 
 void hc_clock_synchronize(const struct timeval *gps,
@@ -185,10 +182,10 @@ void hc_clock_synchronize(const struct timeval *gps,
     if (clockShowDrift || hc_test_mode()) {
         printf ("[%d] %8.3f\n", local->tv_sec%120, drift/1000.0);
         if (hc_test_mode()) {
-            if (absdrift < clockPrecision) {
-                clockSynchronized = hc_clock_status_db->synchronized = 1;
+            if (absdrift < hc_clock_status_db->precision) {
+                hc_clock_status_db->synchronized = 1;
             } else {
-                clockSynchronized = hc_clock_status_db->synchronized = 0;
+                hc_clock_status_db->synchronized = 0;
             }
             return;
         }
@@ -214,11 +211,12 @@ void hc_clock_synchronize(const struct timeval *gps,
     //
     drift = hc_clock_status_db->accumulator / hc_clock_status_db->count;
     absdrift = (drift < 0)? (0 - drift) : drift;
+    hc_clock_status_db->avgdrift = (int)drift;
     if (clockShowDrift)
         printf ("Average drift: %d ms\n", drift);
 
-    if (absdrift < clockPrecision) {
-        clockSynchronized = hc_clock_status_db->synchronized = 1;
+    if (absdrift < hc_clock_status_db->precision) {
+        hc_clock_status_db->synchronized = 1;
     } else {
         // GPS and local system time have drifted apart
         // by a small difference: adjust the time progressively.
@@ -233,10 +231,11 @@ void hc_clock_synchronize(const struct timeval *gps,
 }
 
 int hc_clock_synchronized (void) {
-    return clockSynchronized;
+    if (hc_clock_status_db == 0) return 0;
+    return hc_clock_status_db->synchronized;
 }
 
 void hc_clock_reference (struct timeval *reference) {
-    *reference = clockReference;
+    *reference = hc_clock_status_db->reference;
 }
 

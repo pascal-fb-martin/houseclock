@@ -31,10 +31,10 @@ int hc_broadcast_open (const char *service);
 void hc_broadcast_send (const char *data, int length);
 
 void hc_broadcast_reply
-        (const char *data, int length, struct sockaddr_in *destination);
+        (const char *data, int length, const struct sockaddr_in *destination);
 
 int  hc_broadcast_receive
         (char *buffer, int size, struct sockaddr_in *source);
 
-const char *hc_broadcast_format (struct sockaddr_in *addr);
+const char *hc_broadcast_format (const struct sockaddr_in *addr);
 
