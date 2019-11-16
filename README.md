@@ -26,7 +26,7 @@ Manually run the server using the command:
 ```
 houseclock
 ```
-This will read from the GPS device at /dev/ttyACM0 and listen for HTTP requests on the http port (80). If the GPS device is different and the http port is alredy in use (for example by httpd), force other values using the -http-service and -gps options. For example:
+This will read from the GPS device at /dev/ttyACM0 and listen for HTTP requests on the http port (80). If the GPS device is different and the http port is already in use (for example by httpd), one can force other values using the -http-service and -gps options. For example:
 ```
 houseclock -http-service=8080 -gps=/dev/ttyACM1
 ```
