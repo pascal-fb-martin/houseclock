@@ -113,10 +113,11 @@ static const char *hc_http_status (const char *method, const char *uri,
 
     // This conversion is not made when decoding the NMEA stream to avoid
     // consuming CPU in the high-priority time synchronization process.
-    // If the GPS position information is not set, report the position
-    // of Greenwich.
+    // If the GPS position information is not set, or if the client is not
+    // from a local network, report the position of Greenwich.
     //
-    if (nmea_db->latitude[0] == 0 || nmea_db->longitude[0] == 0) {
+    if (echttp_islocal() == 0 ||
+            nmea_db->latitude[0] == 0 || nmea_db->longitude[0] == 0) {
         strncpy (latitude, "0.0", sizeof(latitude));
         strncpy (longitude, "0.0", sizeof(longitude));
     } else {
