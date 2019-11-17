@@ -199,6 +199,13 @@ static void hc_ntp_broadcast (const ntpHeaderV3 *head,
     time_t death = receive->tv_sec - (hc_ntp_period * 3);
     const char *name = hc_broadcast_format(source);
 
+    if (hc_debug_enabled())
+        printf ("Received broadcast from %s, transmit=%u/%08x at %ld.%03.3d\n",
+                name,
+                ntohl(head->transmit.seconds),
+                ntohl(head->transmit.fraction),
+                (long)(receive->tv_sec), (int)(receive->tv_usec / 1000));
+
     hc_ntp_status_db->live.broadcast += 1;
 
     // Search if that broadcasting server is already known.
@@ -246,6 +253,9 @@ static void hc_ntp_broadcast (const ntpHeaderV3 *head,
     // Elect a time source.
     //
     if (hc_ntp_status_db->source < 0) {
+        if (hc_debug_enabled())
+            printf ("New time source %s\n", hc_ntp_status_db->pool[i].name);
+
         hc_ntp_status_db->source = i;
     }
 
@@ -364,6 +374,11 @@ void hc_ntp_periodic (const struct timeval *wakeup) {
             hc_broadcast_send ((char *)&ntpBroadcast, sizeof(ntpBroadcast));
             latestBroadcast = wakeup->tv_sec;
             hc_ntp_status_db->live.broadcast += 1;
+
+            if (hc_debug_enabled())
+                printf ("Sent broadcast packet at %ld.%03.3d\n",
+                        (long)(timestamp.tv_sec),
+                        (int)(timestamp.tv_usec / 1000));
         }
         hc_ntp_status_db->mode = 'S';
     } else {
