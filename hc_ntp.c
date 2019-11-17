@@ -44,11 +44,8 @@
 #include "hc_broadcast.h"
 
 #define NTP_VERSION 3
-#define NTP_UNIX_EPOCH 2208988800
-#define NTP_FRACTION_MS 4310344
+#define NTP_UNIX_EPOCH 2208988800ull
 
-#define NTP_US_TO_FRACTION(x) ((uint32_t)((x / 1000) * NTP_FRACTION_MS))
-#define NTP_US_TO_MS(x) ((uint32_t)((x * 1000) / NTP_FRACTION_MS))
 
 typedef struct {
     uint32_t seconds;
@@ -171,16 +168,26 @@ int hc_ntp_initialize (int argc, const char **argv) {
 }
 
 
+static uint32_t fraction2usec(uint32_t fraction)
+{
+    return (uint32_t)((double)fraction * 1.0e6 / 4294967296.0);
+}
+ 
+static uint32_t usec2fraction(uint32_t usec)
+{
+    return (uint32_t)((double)usec * 4294967296.0 / 1.0e6);
+}
+
 static void hc_ntp_get_timestamp (struct timeval *local,
                                   const ntpTimestamp *ntp) {
-    local->tv_sec = ntohl(ntp->seconds) - 2208988800;
-    local->tv_usec = NTP_US_TO_MS(ntohl(ntp->fraction));
+    local->tv_sec = ntohl(ntp->seconds) - NTP_UNIX_EPOCH;
+    local->tv_usec = fraction2usec(ntohl(ntp->fraction));
 }
 
 static void hc_ntp_set_timestamp (ntpTimestamp *ntp,
                                   const struct timeval *local) {
-    ntp->seconds = htonl((uint32_t) (local->tv_sec) + 2208988800);
-    ntp->fraction = htonl(NTP_US_TO_FRACTION(local->tv_usec));
+    ntp->seconds = htonl((uint32_t) (local->tv_sec) + NTP_UNIX_EPOCH);
+    ntp->fraction = htonl(usec2fraction(local->tv_usec));
 }
 
 static void hc_ntp_set_reference (ntpHeaderV3 *packet) {

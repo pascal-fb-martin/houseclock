@@ -141,10 +141,10 @@ static void hc_clock_force (const struct timeval *gps,
 
     DEBUG {
         printf ("Forcing time from %ld.%03.3d to %ld.%03.3d, "
-                    "based on server clock %ld.%03.3d\n",
+                    "based on server clock %ld.%03.3d & latency %d\n",
                 (long)(now.tv_sec), (int)(now.tv_usec/1000),
                 (long)(corrected.tv_sec), (int)(corrected.tv_usec/1000),
-                (long)(gps->tv_sec), (int)(gps->tv_usec/1000));
+                (long)(gps->tv_sec), (int)(gps->tv_usec/1000), latency);
     }
     if (settimeofday (&corrected, NULL) != 0) {
         printf ("settimeofday() error %d\n", errno);
