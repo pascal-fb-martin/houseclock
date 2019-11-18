@@ -39,27 +39,31 @@
  *      -precision=<N>  The clock accuracy target for synchronization (ms).
  *      -drift          Print the measured drift (debug)
  *
- * void hc_clock_synchronize(const struct timeval *gps,
+ * void hc_clock_synchronize(const struct timeval *source,
  *                           const struct timeval *local, int latency);
  *
- *    Called when a significant drift was detected, based on GPS time.
- *    Take the gps time matching the "local" time, calculate a drift
- *    that consider the stated latency and correct the local time if
- *    needed.
+ *    Called to synchronize the local time based on a source clock.
+ *    The local time parameter represents an estimate of the exact moment
+ *    when the source time was received. The latency represents an estimate
+ *    of the transmission delay, i.e. the delta between the moment the
+ *    time was sampled at the source and the moment when it was received
+ *    by this machine. This function calculates a drift between the two
+ *    times and corrects the local time if needed.
  *
  * int hc_clock_synchronized (void)
  *
- *    Return 1 when the local system time was synchronized with GPS time.
+ *    Return 1 when the local system time was synchronized with
+ *    the source clock.
  *
  * void hc_clock_reference  (struct timeval *reference);
  * int  hc_clock_dispersion (void);
  *
  *    These two functions are intended for supporting the NTP module.
- *    The reference clock is the time of the latest clock adjustment.
- *    The dispersion is the average drift from the reference clock
+ *    The reference time is the time of the latest clock adjustment.
+ *    The dispersion is the average drift from the source clock
  *    for the latest period. (This does not use the maximum drift
  *    because this is too influenced by the OS response time, which
- *    is unrelated to the accuracy of the clock.)
+ *    is unrelated to the accuracy of the local clock.)
  */
 
 #include <time.h>
@@ -128,16 +132,16 @@ void hc_clock_initialize (int argc, const char **argv) {
     hc_clock_start_learning ();
 }
 
-static void hc_clock_force (const struct timeval *gps,
+static void hc_clock_force (const struct timeval *source,
                             const struct timeval *local, int latency) {
 
     struct timeval now;
-    struct timeval corrected = *gps;
+    struct timeval corrected = *source;
 
     gettimeofday (&now, NULL);
 
-    // Correct the GPS time from the time of the fix (local) to
-    // the current time (now), as estimated using the local clock.
+    // Correct the source time to adjust for the time spent since it was
+    // acquired, as estimated using the local clock (now).
     //
     corrected.tv_sec += (now.tv_sec - local->tv_sec);
     corrected.tv_usec += (now.tv_usec - local->tv_usec) + (latency * 1000);
@@ -151,10 +155,10 @@ static void hc_clock_force (const struct timeval *gps,
 
     DEBUG {
         printf ("Forcing time from %ld.%03.3d to %ld.%03.3d, "
-                    "based on server clock %ld.%03.3d & latency %d\n",
+                    "based on source clock %ld.%03.3d & latency %d\n",
                 (long)(now.tv_sec), (int)(now.tv_usec/1000),
                 (long)(corrected.tv_sec), (int)(corrected.tv_usec/1000),
-                (long)(gps->tv_sec), (int)(gps->tv_usec/1000), latency);
+                (long)(source->tv_sec), (int)(source->tv_usec/1000), latency);
     }
     if (settimeofday (&corrected, NULL) != 0) {
         printf ("settimeofday() error %d\n", errno);
@@ -174,7 +178,7 @@ static void hc_clock_adjust (time_t drift) {
     gettimeofday (&hc_clock_status_db->reference, NULL);
 }
 
-void hc_clock_synchronize(const struct timeval *gps,
+void hc_clock_synchronize(const struct timeval *source,
                           const struct timeval *local, int latency) {
 
     static int FirstCall = 1;
@@ -182,12 +186,12 @@ void hc_clock_synchronize(const struct timeval *gps,
     if (hc_clock_drift_db == 0) return;
     if (hc_clock_status_db == 0) return;
 
-    time_t drift = ((gps->tv_sec - local->tv_sec) * 1000)
-                 + ((gps->tv_usec - local->tv_usec) / 1000) + latency;
+    time_t drift = ((source->tv_sec - local->tv_sec) * 1000)
+                 + ((source->tv_usec - local->tv_usec) / 1000) + latency;
 
     time_t absdrift = (drift < 0)? (0 - drift) : drift;
 
-    hc_clock_drift_db[gps->tv_sec%120] = (int)drift;
+    hc_clock_drift_db[source->tv_sec%120] = (int)drift;
     hc_clock_status_db->drift = (int)drift;
     hc_clock_status_db->timestamp = *local;
 
@@ -205,7 +209,7 @@ void hc_clock_synchronize(const struct timeval *gps,
 
     if (FirstCall || absdrift >= 10000) {
         // Too much of a difference: force system time.
-        hc_clock_force (gps, local, latency);
+        hc_clock_force (source, local, latency);
         hc_clock_start_learning();
         FirstCall = 0;
         return;
@@ -230,11 +234,11 @@ void hc_clock_synchronize(const struct timeval *gps,
     if (absdrift < hc_clock_status_db->precision) {
         hc_clock_status_db->synchronized = 1;
     } else {
-        // GPS and local system time have drifted apart
+        // Source and local system time have drifted apart
         // by a small difference: adjust the time progressively.
         //
         DEBUG {
-            printf ("Time adjust at System = %ld.%3.3d, drift=%d ms\n",
+            printf ("Time adjust at %ld.%3.3d (local), drift=%d ms\n",
                     (long)local->tv_sec, (int)local->tv_usec/1000, drift);
         }
         hc_clock_adjust (drift);
@@ -248,6 +252,7 @@ int hc_clock_synchronized (void) {
 }
 
 void hc_clock_reference (struct timeval *reference) {
+    if (hc_clock_status_db == 0) return;
     *reference = hc_clock_status_db->reference;
 }
 

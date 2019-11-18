@@ -18,7 +18,11 @@
  * Boston, MA  02110-1301, USA.
  *
  *
- * hc_ntp.c - The (S)NTP server implementation.
+ * hc_ntp.c - The (S)NTP implementation.
+ *
+ *    This module behaves as a SNTP stratum 1 server when the NMEA feed
+ *    is active (GPS device is present and a fix was obtained), and as
+ *    a SNTP broadcast client otherwise.
  *
  * SYNOPSYS:
  *
