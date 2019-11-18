@@ -50,6 +50,16 @@
  * int hc_clock_synchronized (void)
  *
  *    Return 1 when the local system time was synchronized with GPS time.
+ *
+ * void hc_clock_reference  (struct timeval *reference);
+ * int  hc_clock_dispersion (void);
+ *
+ *    These two functions are intended for supporting the NTP module.
+ *    The reference clock is the time of the latest clock adjustment.
+ *    The dispersion is the average drift from the reference clock
+ *    for the latest period. (This does not use the maximum drift
+ *    because this is too influenced by the OS response time, which
+ *    is unrelated to the accuracy of the clock.)
  */
 
 #include <time.h>
@@ -239,5 +249,13 @@ int hc_clock_synchronized (void) {
 
 void hc_clock_reference (struct timeval *reference) {
     *reference = hc_clock_status_db->reference;
+}
+
+int hc_clock_dispersion (void) {
+    int drift;
+    if (hc_clock_status_db == 0) return 0;
+    drift = (int)(hc_clock_status_db->avgdrift);
+    if (drift < 0) return 0 - drift;
+    return drift;
 }
 

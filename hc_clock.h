@@ -27,6 +27,7 @@ void hc_clock_synchronize  (const struct timeval *gps,
                             const struct timeval *local, int latency);
 int  hc_clock_synchronized (void);
 void hc_clock_reference    (struct timeval *reference);
+int  hc_clock_dispersion   (void);
 
 /* Live database.
  */

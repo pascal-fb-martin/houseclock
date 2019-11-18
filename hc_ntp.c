@@ -48,6 +48,11 @@
 
 
 typedef struct {
+    uint16_t seconds;
+    uint16_t fraction;
+} ntpTimeshort;
+
+typedef struct {
     uint32_t seconds;
     uint32_t fraction;
 } ntpTimestamp;
@@ -62,7 +67,7 @@ typedef struct
 
     uint32_t rootDelay;
 
-    uint32_t rootDispersion;
+    ntpTimeshort rootDispersion;
 
     char refid[4];
 
@@ -84,7 +89,7 @@ ntpHeaderV3 ntpResponse = {
     10,   // default poll interval recommended in rfc 5905.
     -10,  // don't expect anything better than a millisecond accuracy.
     0,
-    0,
+    {0,0},
     "GPS",
     {0, 0}, // reference.
     {0, 0}, // origin (same as request)
@@ -98,7 +103,7 @@ ntpHeaderV3 ntpBroadcast = {
     10,   // default poll interval recommended in rfc 5905.
     -10,  // don't expect anything better than a millisecond accuracy.
     0,
-    0,
+    {0,0},
     "GPS",
     {0, 0}, // Reference.
     {0, 0}, // origin (always 0)
@@ -197,6 +202,25 @@ static void hc_ntp_set_reference (ntpHeaderV3 *packet) {
     hc_ntp_set_timestamp (&(packet->reference), &timestamp);
 }
 
+static void hc_ntp_set_dispersion (int dispersion, ntpHeaderV3 *packet) {
+    if (dispersion > 1000) {
+        packet->rootDispersion.seconds = htons((uint16_t) (dispersion / 1000));
+        dispersion = dispersion % 1000;
+    } else {
+        packet->rootDispersion.seconds = 0;
+    }
+    packet->rootDispersion.fraction =
+        htons((uint16_t) (double)(dispersion / 1e3) * 65536.);
+}
+
+static int hc_ntp_get_dispersion (const ntpHeaderV3 *packet) {
+
+    int dispersion = ntohs((packet->rootDispersion.fraction * 1e3) / 65536.);
+    if (packet->rootDispersion.seconds != 0) {
+        dispersion += ntohs(packet->rootDispersion.seconds) * 1000;
+    }
+    return dispersion;
+}
 
 static void hc_ntp_broadcast (const ntpHeaderV3 *head,
                               const struct sockaddr_in *source,
@@ -207,11 +231,13 @@ static void hc_ntp_broadcast (const ntpHeaderV3 *head,
     const char *name = hc_broadcast_format(source);
 
     if (hc_debug_enabled())
-        printf ("Received broadcast from %s, transmit=%u/%08x at %ld.%03.3d\n",
+        printf ("Received broadcast from %s at %ld.%03.3d "
+                "(transmit=%u/%08x dispersion=%dms)\n",
                 name,
+                (long)(receive->tv_sec), (int)(receive->tv_usec / 1000),
                 ntohl(head->transmit.seconds),
                 ntohl(head->transmit.fraction),
-                (long)(receive->tv_sec), (int)(receive->tv_usec / 1000));
+                hc_ntp_get_dispersion(head));
 
     hc_ntp_status_db->live.broadcast += 1;
 
@@ -280,6 +306,7 @@ static void hc_ntp_request (const ntpHeaderV3 *head,
     // Build the response using the local system clock, if it has been
     // synchronized with the GPS clock.
 
+    int dispersion;
     struct timeval transmit;
 
     if (!hc_clock_synchronized()) {
@@ -292,6 +319,9 @@ static void hc_ntp_request (const ntpHeaderV3 *head,
     hc_ntp_status_db->live.client += 1;
 
     ntpResponse.origin = head->transmit;
+
+    dispersion = hc_clock_dispersion();
+    hc_ntp_set_dispersion (dispersion, &ntpResponse);
     hc_ntp_set_reference (&ntpResponse);
     hc_ntp_set_timestamp (&ntpResponse.receive, receive);
 
@@ -302,7 +332,7 @@ static void hc_ntp_request (const ntpHeaderV3 *head,
 
     if (hc_debug_enabled())
         printf ("Response to %s: origin=%u/%08x, reference=%u/%08x, "
-                          "receive=%u/%08x, transmit=%u/%08x\n",
+                          "receive=%u/%08x, transmit=%u/%08x dispersion=%dms\n",
             hc_broadcast_format (source),
             ntohl(ntpResponse.origin.seconds),
             ntohl(ntpResponse.origin.fraction),
@@ -311,7 +341,8 @@ static void hc_ntp_request (const ntpHeaderV3 *head,
             ntohl(ntpResponse.receive.seconds),
             ntohl(ntpResponse.receive.fraction),
             ntohl(ntpResponse.transmit.seconds),
-            ntohl(ntpResponse.transmit.fraction));
+            ntohl(ntpResponse.transmit.fraction),
+            dispersion);
 }
 
 
@@ -372,7 +403,9 @@ void hc_ntp_periodic (const struct timeval *wakeup) {
             (wakeup->tv_sec > latestBroadcast + hc_ntp_period)) {
 
             struct timeval timestamp;
+            int dispersion = hc_clock_dispersion();
 
+            hc_ntp_set_dispersion (dispersion, &ntpBroadcast);
             hc_ntp_set_reference (&ntpBroadcast);
 
             gettimeofday (&timestamp, NULL);
@@ -383,9 +416,11 @@ void hc_ntp_periodic (const struct timeval *wakeup) {
             hc_ntp_status_db->live.broadcast += 1;
 
             if (hc_debug_enabled())
-                printf ("Sent broadcast packet at %ld.%03.3d\n",
+                printf ("Sent broadcast packet at %ld.%03.3d "
+                        "(dispersion=%dms)\n",
                         (long)(timestamp.tv_sec),
-                        (int)(timestamp.tv_usec / 1000));
+                        (int)(timestamp.tv_usec / 1000),
+                        dispersion);
         }
         hc_ntp_status_db->mode = 'S';
     } else {
