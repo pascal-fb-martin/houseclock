@@ -25,6 +25,19 @@ houseclock: $(OBJS)
 install:
 	mkdir -p /usr/local/bin
 	cp houseclock /usr/local/bin
-	chown root:root /usr/local/bin/houseclock
-	chmod 755 /usr/local/bin/houseclock
+	cp init.debian /etc/init.d/houseclock
+	chown root:root /usr/local/bin/houseclock /etc/init.d/houseclock
+	chmod 755 /usr/local/bin/houseclock /etc/init.d/houseclock
+	if [ -e /etc/init.d/ntp ] ; then systemctl stop ntp ; systemctl disable ntp ; fi
+	systemctl daemon-reload
+	systemctl enable houseclock
+	systemctl start houseclock
+
+uninstall:
+	systemctl stop houseclock
+	systemctl disable houseclock
+	rm -f /usr/local/bin/houseclock 
+	rm -f /etc/init.d/houseclock
+	systemctl daemon-reload
+	if [ -e /etc/init.d/ntp ] ; then systemctl enable ntp ; systemctl start ntp ; fi
 

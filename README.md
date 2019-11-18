@@ -36,21 +36,33 @@ When no GPS device is available, the software acts as a NTP broadcast client, li
 * make
 * sudo make install
 
-# Quick Start
+This installs HouseClock as a service (for Debian's systemd) and starts it. If ntpd was installed, this stops and disables ntp.
 
-Manually run the server using the command:
-```
-houseclock
-```
-This will read from the GPS device at /dev/ttyACM0, listen for HTTP requests on the http tcp port (80) and handle NTP communication on the ntp udp port (123).
+# Configuration
+
+With default options, HouseClock will read from the GPS device at /dev/ttyACM0, listen for HTTP requests on the http tcp port (80) and handle NTP communication on the ntp udp port (123).
 
 All these default can be changed through command line options. For example, if the GPS device is different and the http port is already in use (httpd is running), one can force other values using the -http-service and -gps options:
 ```
-houseclock -http-service=8080 -gps=/dev/ttyACM1
+houseclock -http-service=8080 -gps=/dev/tty0
 ```
 
 For more information about available options, a complete help is available:
 ```
 houseclock -h
 ````
+
+The service options can be configured by creating file /etc/default/houseclock and set the following shell variables:
+
+**GPS_OPTS**: GPS related options.
+**NTP_OPTS**: NTP related options.
+**HTTP_OPTS**: HTTP related options.
+**OTHER_OPTS**: general purpose options.
+
+For example:
+```
+GPS_OPTS="-gps=/dev/tty0"
+NTP_OPTS="-ntp-period=30"
+HTTP_OPTS="-http-service=8080"
+```
 
