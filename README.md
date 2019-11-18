@@ -4,15 +4,31 @@
 
 This is a project to create a stratum 1 SNTP server based on a local GPS time source for home use. This project depends on [echttp](https://github.com/pascal-fb-martin/echttp).
 
-The main goal is to setup a local time server not dependent on an Internet link, that is easy to install, simple to configure and that can be monitored from a web browser.
+The main goal is to setup a local time server not dependent on an Internet link, that is easy to install, simple to configure and that can be monitored from a web browser. It automatically runs as a client when no GPS device is available.
 
-Why not use gpsd and ntpd? These are designed for PPS, which is not supported by most USB GPS receivers. The installation instructions are quite long and arcane. Many people have done it, but the average person will find it technically demanding.
+# What Makes HouseClock Special?
 
-PPS is not necessary: 1/10 second accuracy is enough for home uses and my USB GPS receiver sends the GPS fix within a few milliseconds anyway. PPS is more useful for a slow GPS connection. On the flip side, the GPS receiver likely introduce a calculation latency..
+This time server does not depend on a PPS (Pulse Per Second) interface. It works with any GPS device that sends common NMEA sentences, including cheap USB GPS receivers. It is easy to configure through a few command line options, with the defaults working with most Linux configurations.
 
-For slower speed USB receivers, a solution is to detect the beginning of each GPS cycle, and calculate the timing of this cycle based on the receive time, the count of characters received and the transmission speed. GPS receivers tend to send the fix information in the first NMEA sentence, reducing the error estimate.
+Unless debug mode was explicitly enabled, this software does not produce any log (periodic log could trash a SD card or eMMC storage), but its status is easily accessible through a Web interface.
 
-Tests on a NTP-synchronized workstation with the VK-162 Usb GPS Navigation Module that I bough for less than $15 show random variations that remain within a -10ms to 10ms range. The average delta with the synchronized time *slowly* changes between 40ms and 0ms: it could be an effect of fluctuation within the NTP synchronization itself.
+Why not use gpsd and ntpd? These are designed for PPS, which is not supported by most (any?) USB GPS receivers. The installation instructions are quite long and arcane. Many people have done it, but the average person will find it technically demanding.
+
+PPS is not necessary: 1/10 second accuracy is more than enough for home use cases and most USB GPS receivers send the GPS fix within a few milliseconds anyway. On the flip side, the GPS receiver likely introduce a calculation latency. PPS is only needed with a slow GPS connection, and when really high accuracy is required, typically for scientific purpose..
+
+For slower speed USB receivers, this software detects the beginning of each GPS cycle, and calculates the timing of this cycle based on the receive time, the count of characters received and the transmission speed. GPS receivers tend to send the fix information in the first NMEA sentence, reducing the error estimate.
+
+Tests on a NTP-synchronized workstation with the VK-162 Usb GPS Navigation Module that can be bough for less than $15 show random variations that remain within a -10ms to 10ms range. The average delta with the synchronized time *slowly* changes between 40ms and 0ms: it could be an effect of fluctuation within the NTP synchronization itself (NTP pool on the Internet).
+
+# Server Mode
+
+This software runs as a stratum 1 time server if a GPS device is detected and a fix was obtained. When server, it answers to client requests and sends periodic NTP messages in local broadcast mode.
+
+This software was not designed to act as a mid-tier server, i.e. it will answer to client requests _only_ when acting as a stratum 1 server. It will never redistribute time obtained from a remote NTP server.
+
+# Client Mode
+
+When no GPS device is available, the software acts as a NTP broadcast client, listening to NTP broadcast messages. In this mode it will select a specific server as time source and stick to this server as long as it operates. If the current time source disappears, the client will switch to another available time source.
 
 # Installation
 
@@ -26,14 +42,14 @@ Manually run the server using the command:
 ```
 houseclock
 ```
-This will read from the GPS device at /dev/ttyACM0 and listen for HTTP requests on the http port (80). If the GPS device is different and the http port is already in use (for example by httpd), one can force other values using the -http-service and -gps options. For example:
+This will read from the GPS device at /dev/ttyACM0, listen for HTTP requests on the http tcp port (80) and handle NTP communication on the ntp udp port (123).
+
+All these default can be changed through command line options. For example, if the GPS device is different and the http port is already in use (httpd is running), one can force other values using the -http-service and -gps options:
 ```
 houseclock -http-service=8080 -gps=/dev/ttyACM1
 ```
 
-If no GPS device is available, the program switches to SNTP client mode and listens to NTP broadcast messages. When a GPS device is available, and a fix is obtained, the program switches to SNTP server mode and periodically sends NTP broadcast messages with stratum 1.
-
-For more information, a complete help is available:
+For more information about available options, a complete help is available:
 ```
 houseclock -h
 ````
