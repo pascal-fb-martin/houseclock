@@ -22,6 +22,10 @@ clean:
 houseclock: $(OBJS)
 	gcc -g -O -o houseclock $(OBJS) -lechttp -lrt
 
+package:
+	mkdir -p packages
+	tar -cf packages/houseclock-`date +%F`.tgz houseclock init.debian Makefile
+
 install:
 	mkdir -p /usr/local/bin
 	cp houseclock /usr/local/bin
