@@ -335,9 +335,12 @@ static void hc_ntp_request (const ntpHeaderV3 *head,
     hc_broadcast_reply ((char *)&ntpResponse, sizeof(ntpResponse), source);
 
     if (hc_debug_enabled())
-        printf ("Response to %s: origin=%u/%08x, reference=%u/%08x, "
-                          "receive=%u/%08x, transmit=%u/%08x dispersion=%dms\n",
+        printf ("Response to %s at %d.%0.03d: "
+                "origin=%u/%08x, reference=%u/%08x, "
+                "receive=%u/%08x, transmit=%u/%08x dispersion=%dms\n",
             hc_broadcast_format (source),
+            (long)(transmit.tv_sec),
+            (int)(transmit.tv_usec / 1000),
             ntohl(ntpResponse.origin.seconds),
             ntohl(ntpResponse.origin.fraction),
             ntohl(ntpResponse.reference.seconds),
@@ -420,10 +423,12 @@ void hc_ntp_periodic (const struct timeval *wakeup) {
             hc_ntp_status_db->live.broadcast += 1;
 
             if (hc_debug_enabled())
-                printf ("Sent broadcast packet at %ld.%03.3d "
-                        "(dispersion=%dms)\n",
+                printf ("Sent broadcast packet at %ld.%03.3d: "
+                        "transmit=%u/%08x, dispersion=%dms\n",
                         (long)(timestamp.tv_sec),
                         (int)(timestamp.tv_usec / 1000),
+                        ntohl(ntpBroadcast.transmit.seconds),
+                        ntohl(ntpBroadcast.transmit.fraction),
                         dispersion);
         }
         hc_ntp_status_db->mode = 'S';
