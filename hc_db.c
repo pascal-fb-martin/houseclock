@@ -47,6 +47,11 @@
  * void *hc_db_get (const char *name);
  *
  *    Access the data for the specified table.
+ *
+ * int hc_db_get_space (void);
+ * int hc_db_get_used  (void);
+ *
+ *    Get information about shared memory usage.
  */
 
 #include <sys/mman.h>
@@ -156,5 +161,13 @@ void *hc_db_get (const char *name) {
     hc_db_table *table = hc_db_search(name);
     if (table) return (void *)(table+1);
     return 0;
+}
+
+int hc_db_get_space (void) {
+    return hc_db->size;
+}
+
+int hc_db_get_used  (void) {
+    return hc_db->used;
 }
 

@@ -25,3 +25,6 @@ int hc_db_get_count (const char *name);
 
 void *hc_db_get (const char *name);
 
+int hc_db_get_space (void);
+int hc_db_get_used  (void);
+

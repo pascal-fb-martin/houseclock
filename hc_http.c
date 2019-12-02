@@ -144,7 +144,8 @@ static const char *hc_http_status (const char *method, const char *uri,
               ",\"timestamp\":%zd.%03d}"
               ",\"learn\":{\"count\":%d,\"accumulator\":%d}"
               ",\"ntp\":{\"mode\":\"%c\",\"received\":%d,\"processed\":%d"
-              ",\"broadcast\":%d}}",
+              ",\"broadcast\":%d}"
+              ",\"mem\":{\"space\":%d,\"used\":%d}}",
               nmea_db->fix?"true":"false",
               (unsigned int)nmea_db->fixtime,
               nmea_db->gpstime,
@@ -162,7 +163,8 @@ static const char *hc_http_status (const char *method, const char *uri,
               ntp_db->mode,
               ntp_db->latest.received,
               ntp_db->latest.client,
-              ntp_db->latest.broadcast);
+              ntp_db->latest.broadcast,
+              hc_db_get_space(), hc_db_get_used());
 
     echttp_content_type_json();
     return JsonBuffer;
@@ -254,11 +256,9 @@ static const char *hc_http_ntpclients (const char *method, const char *uri,
                 + ((ntp_db->clients[i].local.tv_usec
                    - ntp_db->clients[i].origin.tv_usec) / 1000);
         snprintf (buffer, sizeof(buffer),
-           "%s{\"address\":\"%s\",\"origin\":%d.%03d,\"local\":%d.%03d,\"delta\":%d}",
+           "%s{\"address\":\"%s\",\"timestamp\":%d.%03d,\"delta\":%d}",
            prefix,
            hc_broadcast_format(&(ntp_db->clients[i].address)),
-           ntp_db->clients[i].origin.tv_sec,
-           ntp_db->clients[i].origin.tv_usec / 1000,
            ntp_db->clients[i].local.tv_sec,
            ntp_db->clients[i].local.tv_usec / 1000, delta);
         strcat (JsonBuffer, buffer);

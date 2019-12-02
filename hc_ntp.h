@@ -29,7 +29,7 @@ int  hc_ntp_initialize (int argc, const char **argv);
 void hc_ntp_process    (const struct timeval *receive);
 void hc_ntp_periodic   (const struct timeval *now);
 
-#define HC_NTP_DEPTH 60
+#define HC_NTP_DEPTH 128
 #define HC_NTP_POOL  4
 #define HC_NTP_STATUS "NtpStatus"
 
