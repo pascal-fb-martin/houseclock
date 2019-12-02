@@ -247,15 +247,20 @@ static const char *hc_http_ntpclients (const char *method, const char *uri,
     strncpy (JsonBuffer, "{\"ntp\":{\"clients\":[", sizeof(JsonBuffer));
 
     for (i = 0; i < HC_NTP_DEPTH; ++i) {
+        int delta;
         if (ntp_db->clients[i].local.tv_sec == 0) continue;
+        delta = ((ntp_db->clients[i].local.tv_sec
+                   - ntp_db->clients[i].origin.tv_sec) * 1000)
+                + ((ntp_db->clients[i].local.tv_usec
+                   - ntp_db->clients[i].origin.tv_usec) / 1000);
         snprintf (buffer, sizeof(buffer),
-           "%s{\"address\":\"%s\",\"origin\":%d.%03d,\"local\":%d.%03d}",
+           "%s{\"address\":\"%s\",\"origin\":%d.%03d,\"local\":%d.%03d,\"delta\":%d}",
            prefix,
            hc_broadcast_format(&(ntp_db->clients[i].address)),
            ntp_db->clients[i].origin.tv_sec,
            ntp_db->clients[i].origin.tv_usec / 1000,
            ntp_db->clients[i].local.tv_sec,
-           ntp_db->clients[i].local.tv_usec / 1000);
+           ntp_db->clients[i].local.tv_usec / 1000, delta);
         strcat (JsonBuffer, buffer);
         prefix = ",";
     }
