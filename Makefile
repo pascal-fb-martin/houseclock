@@ -27,6 +27,7 @@ package:
 	tar -cf packages/houseclock-`date +%F`.tgz houseclock init.debian Makefile
 
 install:
+	if [ -e /etc/init.d/houseclock ] ; then systemctl stop houseclock ; fi
 	mkdir -p /usr/local/bin
 	cp houseclock /usr/local/bin
 	cp init.debian /etc/init.d/houseclock
