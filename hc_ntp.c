@@ -120,6 +120,7 @@ static const ntpTimestamp zeroTimestamp = {0, 0};
 static hc_ntp_status *hc_ntp_status_db = 0;
 
 static int hc_ntp_period;
+static int hc_ntp_client_cursor = 0;
 
 
 const char *hc_ntp_help (int level) {
@@ -170,6 +171,7 @@ int hc_ntp_initialize (int argc, const char **argv) {
         hc_ntp_status_db->pool[i].local.tv_sec = 0;
     }
     hc_ntp_status_db->source = -1;
+    hc_ntp_status_db->mode = 'I';
 
     if (hc_test_mode()) return -1;
 
@@ -350,6 +352,14 @@ static void hc_ntp_request (const ntpHeaderV3 *head,
             ntohl(ntpResponse.transmit.seconds),
             ntohl(ntpResponse.transmit.fraction),
             dispersion);
+
+    if (++hc_ntp_client_cursor >= HC_NTP_DEPTH) hc_ntp_client_cursor = 0;
+
+    hc_ntp_status_db->clients[hc_ntp_client_cursor].address = *source;
+    hc_ntp_get_timestamp
+        (&(hc_ntp_status_db->clients[hc_ntp_client_cursor].origin),
+         &(ntpResponse.origin));
+    hc_ntp_status_db->clients[hc_ntp_client_cursor].local = *receive;
 }
 
 

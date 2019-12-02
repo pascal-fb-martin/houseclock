@@ -37,6 +37,7 @@
 #include "houseclock.h"
 #include "hc_db.h"
 #include "hc_nmea.h"
+#include "hc_broadcast.h"
 #include "hc_clock.h"
 #include "hc_ntp.h"
 #include "hc_http.h"
@@ -48,6 +49,7 @@ static pid_t parent;
 
 
 static hc_nmea_status *nmea_db = 0;
+static hc_ntp_status *ntp_db = 0;
 
 static char JsonBuffer[8192];
 
@@ -78,10 +80,23 @@ static void *hc_http_attach_nmea (void) {
     }
 }
 
+static void *hc_http_attach_ntp (void) {
+
+    if (ntp_db == 0) {
+        ntp_db = (hc_ntp_status *) hc_http_attach (HC_NTP_STATUS);
+        if (ntp_db == 0) return "";
+        if (hc_db_get_count (HC_NTP_STATUS) != 1
+            || hc_db_get_size (HC_NTP_STATUS) != sizeof(hc_ntp_status)) {
+            fprintf (stderr, "wrong data structure for table %s\n",
+                     HC_NTP_STATUS);
+            exit (1);
+        }
+    }
+}
+
 static const char *hc_http_status (const char *method, const char *uri,
                                    const char *data, int length) {
     static hc_clock_status *clock_db = 0;
-    static hc_ntp_status *ntp_db = 0;
 
     char latitude[20];
     char longitude[20];
@@ -100,16 +115,7 @@ static const char *hc_http_status (const char *method, const char *uri,
         }
     }
 
-    if (ntp_db == 0) {
-        ntp_db = (hc_ntp_status *) hc_http_attach (HC_NTP_STATUS);
-        if (ntp_db == 0) return "";
-        if (hc_db_get_count (HC_NTP_STATUS) != 1
-            || hc_db_get_size (HC_NTP_STATUS) != sizeof(hc_ntp_status)) {
-            fprintf (stderr, "wrong data structure for table %s\n",
-                     HC_NTP_STATUS);
-            exit (1);
-        }
-    }
+    hc_http_attach_ntp();
 
     // This conversion is not made when decoding the NMEA stream to avoid
     // consuming CPU in the high-priority time synchronization process.
@@ -229,6 +235,35 @@ static const char *hc_http_clockdrift (const char *method, const char *uri,
     return JsonBuffer;
 }
 
+static const char *hc_http_ntpclients (const char *method, const char *uri,
+                                       const char *data, int length) {
+
+    int i;
+    char buffer[1024];
+    const char *prefix = "";
+
+    hc_http_attach_ntp();
+
+    strncpy (JsonBuffer, "{\"ntp\":{\"clients\":[", sizeof(JsonBuffer));
+
+    for (i = 0; i < HC_NTP_DEPTH; ++i) {
+        if (ntp_db->clients[i].local.tv_sec == 0) continue;
+        snprintf (buffer, sizeof(buffer),
+           "%s{\"address\":\"%s\",\"origin\":%d.%03d,\"local\":%d.%03d}",
+           prefix,
+           hc_broadcast_format(&(ntp_db->clients[i].address)),
+           ntp_db->clients[i].origin.tv_sec,
+           ntp_db->clients[i].origin.tv_usec / 1000,
+           ntp_db->clients[i].local.tv_sec,
+           ntp_db->clients[i].local.tv_usec / 1000);
+        strcat (JsonBuffer, buffer);
+        prefix = ",";
+    }
+    strcat (JsonBuffer, "]}}");
+    echttp_content_type_json();
+    return JsonBuffer;
+}
+
 const char *hc_http_help (int level) {
     return echttp_help(level);
 }
@@ -240,6 +275,7 @@ void hc_http (int argc, const char **argv) {
     echttp_route_uri ("/status", hc_http_status);
     echttp_route_uri ("/clock/drift", hc_http_clockdrift);
     echttp_route_uri ("/gps", hc_http_gps);
+    echttp_route_uri ("/ntp/clients", hc_http_ntpclients);
     echttp_static_route ("/ui", "/usr/local/lib/houseclock/public");
     echttp_background (&hc_background);
     echttp_loop();

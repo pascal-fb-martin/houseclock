@@ -20,6 +20,8 @@
  *
  * hc_ntp.h - The NTP server implementation.
  */
+#include <arpa/inet.h>
+#include <netdb.h>
 
 const char *hc_ntp_help (int level);
 
@@ -38,6 +40,12 @@ struct hc_ntp_traffic {
     time_t timestamp;
 };
 
+struct hc_ntp_client {
+    struct sockaddr_in address;
+    struct timeval origin;
+    struct timeval local;
+};
+
 struct hc_ntp_server {
     struct timeval origin;
     struct timeval local;
@@ -53,5 +61,6 @@ typedef struct {
     struct hc_ntp_traffic live;
     struct hc_ntp_traffic latest;
     struct hc_ntp_traffic history[HC_NTP_DEPTH];
+    struct hc_ntp_client  clients[HC_NTP_DEPTH];
 } hc_ntp_status;
 
