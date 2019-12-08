@@ -81,6 +81,7 @@
 #include "hc_broadcast.h"
 
 static int udpserver = -1;
+static int serverport = 0;
 
 #define UDPCLIENT_MAX 16
 static int udpclient[UDPCLIENT_MAX];
@@ -178,30 +179,29 @@ void hc_broadcast_enumerate (void) {
 int hc_broadcast_open (const char *service) {
 
     int value;
-    int port;
 
     // Open the UDP server socket for receiving NTP requests and sending
-    // responses. This must be the last socket to open.
+    // responses.
     //
     struct servent *entry = getservbyname(service, "udp");
 
     if (entry == NULL) {
         if (isdigit (service[0])) {
-           port = atoi(service);
+           serverport = atoi(service);
         }
     } else {
-        port = ntohs(entry->s_port);
+        serverport = ntohs(entry->s_port);
     }
 
-    if (port <= 0) {
+    if (serverport <= 0) {
         fprintf (stderr, "invalid service name %s\n", service);
         exit (1);
     }
 
     DEBUG printf ("Opening UDP port %d (name: %s)\n",
-                  port, (entry == NULL)?"(null)":entry->s_name);
+                  serverport, (entry == NULL)?"(null)":entry->s_name);
 
-    udpserver = hc_broadcast_socket(INADDR_ANY, port);
+    udpserver = hc_broadcast_socket(INADDR_ANY, serverport);
 
     value = 1024 * 1024;
     if (setsockopt(udpserver,
@@ -218,8 +218,6 @@ int hc_broadcast_open (const char *service) {
        exit (1);
     }
 
-    netaddress.sin_addr.s_addr = INADDR_BROADCAST;
-
     return udpserver;
 }
 
@@ -227,6 +225,9 @@ int hc_broadcast_open (const char *service) {
 void hc_broadcast_send (const char *data, int length, int *address) {
 
     int i;
+
+    netaddress.sin_addr.s_addr = INADDR_BROADCAST;
+    netaddress.sin_port = htons(serverport);
 
     for (i = 0; i < udpclient_count; ++i) {
         if (udpclient[i] < 0) continue;
