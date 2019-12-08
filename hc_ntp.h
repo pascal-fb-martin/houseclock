@@ -50,6 +50,7 @@ struct hc_ntp_server {
     struct timeval origin;
     struct timeval local;
     short  stratum;
+    struct sockaddr_in address;
     char   name[48];
 };
 

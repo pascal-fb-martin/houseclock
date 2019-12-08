@@ -227,6 +227,7 @@ static void hc_ntp_broadcastmsg (const ntpHeaderV3 *head,
     int i, sender, available, weak;
     time_t death = receive->tv_sec - (hc_ntp_period * 3);
     const char *name = hc_broadcast_format(source);
+    int ipaddress = source->sin_addr.s_addr;
 
     // This function handles any stratum value, even while this software
     // only send broadcast with stratum 1. We do so because we might receive
@@ -252,7 +253,7 @@ static void hc_ntp_broadcastmsg (const ntpHeaderV3 *head,
     sender = -1;
     available = -1;
     for (i = 0; i < HC_NTP_POOL; ++i) {
-        if (strcmp (name, hc_ntp_status_db->pool[i].name) == 0) {
+        if (ipaddress == hc_ntp_status_db->pool[i].address.sin_addr.s_addr) {
             sender = i;
         } else if (hc_ntp_status_db->pool[i].local.tv_sec < death) {
             // Forget a time server that stopped talking.
@@ -285,6 +286,7 @@ static void hc_ntp_broadcastmsg (const ntpHeaderV3 *head,
 
     // Store the latest information from that server.
     //
+    hc_ntp_status_db->pool[sender].address = *source;
     hc_ntp_status_db->pool[sender].local = *receive;
     hc_ntp_status_db->pool[sender].stratum = head->stratum;
     hc_ntp_get_timestamp

@@ -84,9 +84,15 @@ static int udpserver = -1;
 static int serverport = 0;
 
 #define UDPCLIENT_MAX 16
-static int udpclient[UDPCLIENT_MAX];
-static int interface[UDPCLIENT_MAX];
-static int ipmask[UDPCLIENT_MAX];
+typedef struct {
+    char name[16];
+    int socket;
+    int address;
+    int mask;
+    int broadcast;
+} NetworkInterface;
+
+static NetworkInterface udpclient[UDPCLIENT_MAX];
 static int udpclient_count = 0;
 
 static struct sockaddr_in netaddress;
@@ -139,8 +145,8 @@ void hc_broadcast_enumerate (void) {
     struct sockaddr_in *ia;
 
     while (--udpclient_count >= 0) {
-        if (udpclient[udpclient_count] >= 0) {
-            close (udpclient[udpclient_count]);
+        if (udpclient[udpclient_count].socket >= 0) {
+            close (udpclient[udpclient_count].socket);
         }
     }
 
@@ -154,6 +160,8 @@ void hc_broadcast_enumerate (void) {
 
         for (cursor = cards; cursor != 0; cursor = cursor->ifa_next) {
 
+            NetworkInterface *client = udpclient + udpclient_count;
+
             if ((cursor->ifa_addr == 0) || (cursor->ifa_netmask == 0)) continue;
             if (cursor->ifa_addr->sa_family != AF_INET)  continue;
 
@@ -162,13 +170,15 @@ void hc_broadcast_enumerate (void) {
                           cursor->ifa_name, ia->sin_addr.s_addr);
 
             if (ia->sin_addr.s_addr == htonl(INADDR_LOOPBACK)) continue;
-            interface[udpclient_count] = ia->sin_addr.s_addr;
-
-            udpclient[udpclient_count] =
-                hc_broadcast_socket(ia->sin_addr.s_addr, 0);
+            client->address = ia->sin_addr.s_addr;
 
             ia = (struct sockaddr_in *) (cursor->ifa_netmask);
-            ipmask[udpclient_count] = ia->sin_addr.s_addr;
+            client->mask = ia->sin_addr.s_addr;
+
+            client->broadcast = client->address | (~ client->mask);
+
+            client->socket = hc_broadcast_socket(client->address, 0);
+            strncpy (client->name, cursor->ifa_name, sizeof(client->name));
 
             if (++udpclient_count >= UDPCLIENT_MAX) break;
         }
@@ -230,10 +240,18 @@ void hc_broadcast_send (const char *data, int length, int *address) {
     netaddress.sin_port = htons(serverport);
 
     for (i = 0; i < udpclient_count; ++i) {
-        if (udpclient[i] < 0) continue;
-        if (address != 0) *address = interface[i];
-        sendto (udpclient[i], data, length, 0,
-                (struct sockaddr *)&netaddress, sizeof(netaddress));
+        NetworkInterface *client = udpclient + i;
+        if (client->socket < 0) continue;
+        if (address != 0) *address = client->address;
+        netaddress.sin_addr.s_addr = client->broadcast;
+        if (sendto (client->socket, data, length, 0,
+                    (struct sockaddr *)&netaddress, sizeof(netaddress)) < 0) {
+            fprintf (stderr, "cannot send broadcast on interface %s: %s\n",
+                     client->name, strerror(errno));
+            continue;
+        }
+        DEBUG printf ("Packet sent to address %s on interface %s\n",
+                      hc_broadcast_format(&netaddress), client->name);
     }
 }
 
@@ -259,8 +277,9 @@ int hc_broadcast_local (int address) {
     if (udpclient_count <= 0) return INADDR_LOOPBACK;
 
     for (i = udpclient_count - 1; i >= 0; --i) {
-        if ((interface[i] & ipmask[i]) == (address & ipmask[i]))
-            return interface[i];
+        NetworkInterface *client = udpclient + i;
+        if ((client->address & client->mask) == (address & client->mask))
+            return client->address;
     }
     return 0;
 }
