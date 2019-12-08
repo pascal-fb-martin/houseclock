@@ -40,6 +40,8 @@
  *    Send a periodic NTP time message.
  */
 
+#include <string.h>
+
 #include "houseclock.h"
 #include "hc_db.h"
 #include "hc_ntp.h"
@@ -272,6 +274,8 @@ static void hc_ntp_broadcastmsg (const ntpHeaderV3 *head,
     // or else replaces a lower-quality server.
     //
     if (sender < 0) {
+        char *column;
+
         if (available < 0) {
             if (weak < 0) return; // Too many good NTP servers?
             available = weak;
@@ -279,6 +283,8 @@ static void hc_ntp_broadcastmsg (const ntpHeaderV3 *head,
         sender = available;
         strncpy (hc_ntp_status_db->pool[sender].name,
                  name, sizeof(hc_ntp_status_db->pool[0].name));
+        column = strchr (hc_ntp_status_db->pool[sender].name, ':');
+        if (column) *column = 0; // No need for the port number anymore.
         if (hc_debug_enabled())
             printf ("Assigned slot %d (current source: %d)\n",
                     sender, hc_ntp_status_db->source);

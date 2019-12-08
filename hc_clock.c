@@ -162,8 +162,15 @@ static void hc_clock_force (const struct timeval *source,
     }
     if (settimeofday (&corrected, NULL) != 0) {
         printf ("settimeofday() error %d\n", errno);
+        return;
+    }
+    DEBUG {
+       gettimeofday (&corrected, 0);
+       printf ("Time set to %ld.%03.3d\n",
+               (long)(corrected.tv_sec), (int)(corrected.tv_usec/1000));
     }
     hc_clock_status_db->reference = corrected;
+    hc_clock_status_db->synchronized = 1;
 }
 
 static void hc_clock_adjust (time_t drift) {
@@ -235,6 +242,7 @@ void hc_clock_synchronize(const struct timeval *source,
         printf ("Average drift: %d ms\n", drift);
 
     if (absdrift < hc_clock_status_db->precision) {
+        DEBUG printf ("Clock is synchronized.\n");
         hc_clock_status_db->synchronized = 1;
     } else {
         // Source and local system time have drifted apart
@@ -243,6 +251,10 @@ void hc_clock_synchronize(const struct timeval *source,
         DEBUG {
             printf ("Time adjust at %ld.%3.3d (local), drift=%d ms\n",
                     (long)local->tv_sec, (int)local->tv_usec/1000, drift);
+        }
+        if (absdrift > 50 * hc_clock_status_db->precision) {
+            DEBUG printf ("Synchronization was lost.\n");
+            hc_clock_status_db->synchronized = 0; // Lost it, for now.
         }
         hc_clock_adjust (drift);
     }
