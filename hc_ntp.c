@@ -462,6 +462,8 @@ void hc_ntp_periodic (const struct timeval *wakeup) {
             hc_ntp_set_dispersion (dispersion, &ntpBroadcast);
             hc_ntp_set_reference (&ntpBroadcast);
 
+            hc_broadcast_enumerate();
+
             gettimeofday (&timestamp, NULL);
             hc_ntp_set_timestamp (&ntpBroadcast.transmit, &timestamp);
 

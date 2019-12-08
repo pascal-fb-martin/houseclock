@@ -28,6 +28,11 @@
  *
  *    Open the broadcast UDP socket and returns the socket ID.
  *
+ * void hc_broadcast_enumerate (void);
+ *
+ *    Retrieve the local interfaces. Must be called before hc_broadcast_send()
+ *    to adjust to network interface changes.
+ *
  * void hc_broadcast_send (const char *data, int length, int *address)
  *
  *    Send a data packet in broadcast mode. This transmits a broadcast packet
@@ -220,8 +225,6 @@ int hc_broadcast_open (const char *service) {
 void hc_broadcast_send (const char *data, int length, int *address) {
 
     int i;
-
-    hc_broadcast_enumerate ();
 
     for (i = 0; i < udpclient_count; ++i) {
         if (udpclient[i] < 0) continue;

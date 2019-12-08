@@ -144,12 +144,15 @@ int main (int argc, const char **argv) {
     hc_db_create (atoi(dbsizestr)*1024*1024);
     pid_t httpid = fork();
     if (httpid == 0) {
+        nice (19); // The HTTP server is low priority.
         hc_http (argc, argv);
     }
     if (httpid < 0) {
         fprintf (stderr, "Cannot fork: %s\n", strerror (errno));
         exit (1);
     }
+
+    nice (-20); // The NTP server is high priority.
 
     hc_clock_initialize (argc, argv);
 

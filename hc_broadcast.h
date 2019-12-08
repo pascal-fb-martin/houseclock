@@ -28,6 +28,7 @@
 
 int hc_broadcast_open (const char *service);
 
+void hc_broadcast_enumerate (void);
 void hc_broadcast_send (const char *data, int length, int *address);
 
 void hc_broadcast_reply
