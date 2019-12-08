@@ -220,15 +220,6 @@ static void hc_ntp_set_dispersion (int dispersion, ntpHeaderV3 *packet) {
         htons((uint16_t) (double)(dispersion / 1e3) * 65536.);
 }
 
-static int hc_ntp_get_dispersion (const ntpHeaderV3 *packet) {
-
-    int dispersion = ntohs((packet->rootDispersion.fraction * 1e3) / 65536.);
-    if (packet->rootDispersion.seconds != 0) {
-        dispersion += ntohs(packet->rootDispersion.seconds) * 1000;
-    }
-    return dispersion;
-}
-
 static void hc_ntp_broadcastmsg (const ntpHeaderV3 *head,
                                  const struct sockaddr_in *source,
                                  const struct timeval *receive) {
@@ -243,13 +234,12 @@ static void hc_ntp_broadcastmsg (const ntpHeaderV3 *head,
 
     if (hc_debug_enabled())
         printf ("Received broadcast from %s at %ld.%03.3d: "
-                "stratum=%d transmit=%u/%08x dispersion=%dms\n",
+                "stratum=%d transmit=%u/%08x\n",
                 name,
                 (long)(receive->tv_sec), (int)(receive->tv_usec / 1000),
                 head->stratum,
                 ntohl(head->transmit.seconds),
-                ntohl(head->transmit.fraction),
-                hc_ntp_get_dispersion(head));
+                ntohl(head->transmit.fraction));
 
     if (head->stratum == 0) return;
 
@@ -289,7 +279,8 @@ static void hc_ntp_broadcastmsg (const ntpHeaderV3 *head,
         strncpy (hc_ntp_status_db->pool[sender].name,
                  name, sizeof(hc_ntp_status_db->pool[0].name));
         if (hc_debug_enabled())
-            printf ("Assigned slot %d\n", sender);
+            printf ("Assigned slot %d (current source: %d)\n",
+                    sender, hc_ntp_status_db->source);
     }
 
     // Store the latest information from that server.
@@ -297,7 +288,7 @@ static void hc_ntp_broadcastmsg (const ntpHeaderV3 *head,
     hc_ntp_status_db->pool[sender].local = *receive;
     hc_ntp_status_db->pool[sender].stratum = head->stratum;
     hc_ntp_get_timestamp
-         (&(hc_ntp_status_db->pool[i].origin), &(head->transmit));
+         (&(hc_ntp_status_db->pool[sender].origin), &(head->transmit));
 
     // Elect a time source. Choose the lowest stratum available.
     //
@@ -307,6 +298,7 @@ static void hc_ntp_broadcastmsg (const ntpHeaderV3 *head,
         available = sender;
         for (i = 0; i < HC_NTP_POOL; ++i) {
             if (hc_ntp_status_db->pool[i].local.tv_sec < death) continue;
+            if (hc_ntp_status_db->pool[i].stratum <= 0) continue;
             if (hc_ntp_status_db->pool[i].stratum < stratum) {
                 available = i;
                 stratum = hc_ntp_status_db->pool[i].stratum;
@@ -338,6 +330,9 @@ static void hc_ntp_broadcastmsg (const ntpHeaderV3 *head,
         hc_clock_synchronize
             (&(hc_ntp_status_db->pool[sender].origin), receive, 0);
         hc_ntp_status_db->stratum = hc_ntp_status_db->pool[sender].stratum + 1;
+        if (hc_debug_enabled())
+            printf ("Using time from NTP server %s\n",
+                    hc_ntp_status_db->pool[sender].name);
     }
 }
 

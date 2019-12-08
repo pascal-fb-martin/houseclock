@@ -54,9 +54,9 @@ struct hc_ntp_server {
 };
 
 typedef struct {
-    char mode;
-    char source;
-    short stratum;
+    char   mode;
+    int8_t source;
+    short  stratum;
     struct hc_ntp_server  pool[HC_NTP_POOL];
 
     struct hc_ntp_traffic live;
