@@ -163,11 +163,11 @@ void hc_broadcast_enumerate (void) {
             if (ia->sin_addr.s_addr == htonl(INADDR_LOOPBACK)) continue;
             interface[udpclient_count] = ia->sin_addr.s_addr;
 
-            ia = (struct sockaddr_in *) (cursor->ifa_netmask);
-            ipmask[udpclient_count] = ia->sin_addr.s_addr;
-
             udpclient[udpclient_count] =
                 hc_broadcast_socket(ia->sin_addr.s_addr, 0);
+
+            ia = (struct sockaddr_in *) (cursor->ifa_netmask);
+            ipmask[udpclient_count] = ia->sin_addr.s_addr;
 
             if (++udpclient_count >= UDPCLIENT_MAX) break;
         }
