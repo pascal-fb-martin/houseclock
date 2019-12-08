@@ -120,7 +120,8 @@ static int hc_broadcast_socket (int ipv4, int port) {
 
     if (bind(s, (struct sockaddr *)&netaddress, sizeof(netaddress)) < 0) {
        fprintf (stderr,
-                "cannot bind to port %d: %s\n", port, strerror(errno));
+                "cannot bind to %s: %s\n",
+                hc_broadcast_format(&netaddress), strerror(errno));
        exit (1);
     }
 
@@ -245,7 +246,7 @@ const char *hc_broadcast_format (const struct sockaddr_in *addr) {
               (addr->sin_addr.s_addr >> 8) & 0xff,
               (addr->sin_addr.s_addr >> 16) & 0xff,
               (addr->sin_addr.s_addr >> 24) & 0xff,
-              addr->sin_port);
+              ntohs(addr->sin_port));
 
     return formatted;
 }
