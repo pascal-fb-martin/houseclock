@@ -152,13 +152,14 @@ void hc_broadcast_enumerate (void) {
 
         for (cursor = cards; cursor != 0; cursor = cursor->ifa_next) {
 
-            DEBUG printf ("Network interface %s\n", cursor->ifa_name);
-
             if ((cursor->ifa_addr == 0) || (cursor->ifa_netmask == 0)) continue;
             if (cursor->ifa_addr->sa_family != AF_INET)  continue;
 
             ia = (struct sockaddr_in *) (cursor->ifa_addr);
-            if (ia->sin_addr.s_addr == INADDR_LOOPBACK) continue;
+            DEBUG printf ("Network interface %s (%08x)\n",
+                          cursor->ifa_name, ia->sin_addr.s_addr);
+
+            if (ia->sin_addr.s_addr == htonl(INADDR_LOOPBACK)) continue;
             interface[udpclient_count] = ia->sin_addr.s_addr;
 
             ia = (struct sockaddr_in *) (cursor->ifa_netmask);
