@@ -358,11 +358,12 @@ static void hc_ntp_requestmsg (const ntpHeaderV3 *head,
         ntpResponse.stratum = 1;
         strncpy (ntpResponse.refid, "GPS", sizeof(ntpResponse.refid));
     } else {
-        int local = hc_broadcast_local (source->sin_addr.s_addr);
-        if (local == 0) return; // Ignore non-local requests.
+        int ntpsource = hc_ntp_status_db->source;
+        if (ntpsource < 0) return; // No time source.
 
         ntpResponse.stratum = (uint8_t) hc_ntp_status_db->stratum;
-        *((int *)(ntpResponse.refid)) = local;
+        *((int *)(ntpResponse.refid)) =
+            hc_ntp_status_db->pool[ntpsource].address.sin_addr.s_addr;
     }
 
     hc_ntp_status_db->live.client += 1;
@@ -475,8 +476,7 @@ void hc_ntp_periodic (const struct timeval *wakeup) {
             gettimeofday (&timestamp, NULL);
             hc_ntp_set_timestamp (&ntpBroadcast.transmit, &timestamp);
 
-            hc_broadcast_send ((char *)&ntpBroadcast, sizeof(ntpBroadcast),
-                               (int *)(ntpBroadcast.refid));
+            hc_broadcast_send ((char *)&ntpBroadcast, sizeof(ntpBroadcast), 0);
 
             latestBroadcast = wakeup->tv_sec;
             hc_ntp_status_db->live.broadcast += 1;
