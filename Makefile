@@ -31,6 +31,7 @@ package:
 install:
 	if [ -e /etc/init.d/houseclock ] ; then systemctl stop houseclock ; fi
 	mkdir -p /usr/local/bin
+	rm -f /usr/local/bin/houseclock /etc/init.d/houseclock
 	cp houseclock /usr/local/bin
 	cp init.debian /etc/init.d/houseclock
 	chown root:root /usr/local/bin/houseclock /etc/init.d/houseclock
