@@ -172,6 +172,7 @@ int hc_ntp_initialize (int argc, const char **argv) {
     }
     hc_ntp_status_db->source = -1;
     hc_ntp_status_db->mode = 'I';
+    hc_ntp_status_db->stratum = 0;
 
     if (hc_test_mode()) return -1;
 
@@ -228,98 +229,137 @@ static int hc_ntp_get_dispersion (const ntpHeaderV3 *packet) {
     return dispersion;
 }
 
-static void hc_ntp_broadcast (const ntpHeaderV3 *head,
-                              const struct sockaddr_in *source,
-                              const struct timeval *receive) {
+static void hc_ntp_broadcastmsg (const ntpHeaderV3 *head,
+                                 const struct sockaddr_in *source,
+                                 const struct timeval *receive) {
 
-    int i, next;
+    int i, sender, available, weak;
     time_t death = receive->tv_sec - (hc_ntp_period * 3);
     const char *name = hc_broadcast_format(source);
 
+    // This function handles any stratum value, even while this software
+    // only send broadcast with stratum 1. We do so because we might receive
+    // broadcast packets from other NTP software (e.g. ntpd or chrony).
+
     if (hc_debug_enabled())
-        printf ("Received broadcast from %s at %ld.%03.3d "
-                "(transmit=%u/%08x dispersion=%dms)\n",
+        printf ("Received broadcast from %s at %ld.%03.3d: "
+                "stratum=%d transmit=%u/%08x dispersion=%dms\n",
                 name,
                 (long)(receive->tv_sec), (int)(receive->tv_usec / 1000),
+                head->stratum,
                 ntohl(head->transmit.seconds),
                 ntohl(head->transmit.fraction),
                 hc_ntp_get_dispersion(head));
 
+    if (head->stratum == 0) return;
+
     hc_ntp_status_db->live.broadcast += 1;
 
     // Search if that broadcasting server is already known.
+    // This loop also looks for available slots and remove dead servers.
     //
-    next = -1;
+    weak = -1;
+    sender = -1;
+    available = -1;
     for (i = 0; i < HC_NTP_POOL; ++i) {
-        if (strcmp (name, hc_ntp_status_db->pool[i].name) == 0) break;
-        if (hc_ntp_status_db->pool[i].local.tv_sec < death) {
+        if (strcmp (name, hc_ntp_status_db->pool[i].name) == 0) {
+            sender = i;
+        } else if (hc_ntp_status_db->pool[i].local.tv_sec < death) {
             // Forget a time server that stopped talking.
-            if (i == hc_ntp_status_db->source) {
+            if (hc_ntp_status_db->source == i) {
                 hc_ntp_status_db->source = -1;
             }
-            if (next < 0) next = i; // Good slot for a new server.
+            hc_ntp_status_db->pool[i].stratum = 0;
+
+            if (available < 0) available = i; // Good slot for a new server.
+        } else if (hc_ntp_status_db->pool[i].stratum > head->stratum) {
+            if (weak < 0) weak = i; // This is a lower quality server.
         }
     }
 
-    // Make sure we do not keep following a time server that died,
-    // even if last on the list.
+    // If not known yet it goes to an empty slot, replaces a dead server
+    // or else replaces a lower-quality server.
     //
-    if (hc_ntp_status_db->source >= 0) {
-        int source = hc_ntp_status_db->source;
-        if (source != i) {
-            if (hc_ntp_status_db->pool[source].local.tv_sec < death) {
-                hc_ntp_status_db->source = -1;
-                if (next < 0) next = source; // Good slot for a new server.
-            }
+    if (sender < 0) {
+        if (available < 0) {
+            if (weak < 0) return; // Too many good NTP servers?
+            available = weak;
         }
-    }
-
-    // If not known yet it goes to an empty slot, or replaces a dead server.
-    //
-    if (i >= HC_NTP_POOL) {
-        if (next < 0) return; // Too many active servers to choose from.
-        i = next;
-        strncpy (hc_ntp_status_db->pool[i].name,
+        sender = available;
+        strncpy (hc_ntp_status_db->pool[sender].name,
                  name, sizeof(hc_ntp_status_db->pool[0].name));
+        if (hc_debug_enabled())
+            printf ("Assigned slot %d\n", sender);
     }
 
-    // Store the latest time information.
+    // Store the latest information from that server.
     //
-    hc_ntp_status_db->pool[i].local = *receive;
+    hc_ntp_status_db->pool[sender].local = *receive;
+    hc_ntp_status_db->pool[sender].stratum = head->stratum;
     hc_ntp_get_timestamp
          (&(hc_ntp_status_db->pool[i].origin), &(head->transmit));
 
-    // Elect a time source.
+    // Elect a time source. Choose the lowest stratum available.
     //
     if (hc_ntp_status_db->source < 0) {
-        if (hc_debug_enabled())
-            printf ("New time source %s\n", hc_ntp_status_db->pool[i].name);
 
-        hc_ntp_status_db->source = i;
+        short stratum = 255;
+        available = sender;
+        for (i = 0; i < HC_NTP_POOL; ++i) {
+            if (hc_ntp_status_db->pool[i].local.tv_sec < death) continue;
+            if (hc_ntp_status_db->pool[i].stratum < stratum) {
+                available = i;
+                stratum = hc_ntp_status_db->pool[i].stratum;
+                if (stratum == 1) break; // Cannot get lower than this.
+            }
+        }
+        if (hc_debug_enabled())
+            printf ("New time source %s (stratum %d)\n",
+                    hc_ntp_status_db->pool[available].name,
+                    hc_ntp_status_db->pool[available].stratum);
+
+        hc_ntp_status_db->source = available;
+
+    } else if (sender != hc_ntp_status_db->source) {
+
+        if (hc_ntp_status_db->pool[sender].stratum <
+               hc_ntp_status_db->pool[hc_ntp_status_db->source].stratum) {
+            if (hc_debug_enabled())
+                printf ("Better time source %s (stratum %d)\n",
+                        hc_ntp_status_db->pool[sender].name,
+                        hc_ntp_status_db->pool[sender].stratum);
+            hc_ntp_status_db->source = sender;
+        }
     }
 
     // Synchronize our time on the elected time source.
     //
-    if (i == hc_ntp_status_db->source) {
-        hc_clock_synchronize (&(hc_ntp_status_db->pool[i].origin), receive, 0);
+    if (sender == hc_ntp_status_db->source) {
+        hc_clock_synchronize
+            (&(hc_ntp_status_db->pool[sender].origin), receive, 0);
+        hc_ntp_status_db->stratum = hc_ntp_status_db->pool[sender].stratum + 1;
     }
 }
 
-static void hc_ntp_request (const ntpHeaderV3 *head,
-                            const struct sockaddr_in *source,
-                            const struct timeval *receive) {
+static void hc_ntp_requestmsg (const ntpHeaderV3 *head,
+                               const struct sockaddr_in *source,
+                               const struct timeval *receive) {
 
     // Build the response using the local system clock, if it has been
-    // synchronized with the GPS clock.
+    // synchronized with GPS or remote broadcast server.
 
     int dispersion;
     struct timeval transmit;
 
-    if (!hc_clock_synchronized()) {
-        if (hc_debug_enabled())
-            printf ("Ignoring request from %s: not synchronized\n",
-                    hc_broadcast_format (source));
-        return; // Ignore all requests until local time is OK.
+    if (hc_nmea_active()) {
+        ntpResponse.stratum = 1;
+        strncpy (ntpResponse.refid, "GPS", sizeof(ntpResponse.refid));
+    } else {
+        int local = hc_broadcast_local (source->sin_addr.s_addr);
+        if (local == 0) return; // Ignore non-local requests.
+
+        ntpResponse.stratum = (uint8_t) hc_ntp_status_db->stratum;
+        *((int *)(ntpResponse.refid)) = local;
     }
 
     hc_ntp_status_db->live.client += 1;
@@ -338,11 +378,12 @@ static void hc_ntp_request (const ntpHeaderV3 *head,
 
     if (hc_debug_enabled())
         printf ("Response to %s at %d.%0.03d: "
-                "origin=%u/%08x, reference=%u/%08x, "
-                "receive=%u/%08x, transmit=%u/%08x dispersion=%dms\n",
+                "stratum=%d origin=%u/%08x reference=%u/%08x "
+                "receive=%u/%08x transmit=%u/%08x dispersion=%dms\n",
             hc_broadcast_format (source),
             (long)(transmit.tv_sec),
             (int)(transmit.tv_usec / 1000),
+            ntpResponse.stratum,
             ntohl(ntpResponse.origin.seconds),
             ntohl(ntpResponse.origin.fraction),
             ntohl(ntpResponse.reference.seconds),
@@ -379,15 +420,16 @@ void hc_ntp_process (const struct timeval *receive) {
 
         switch (head->liVnMode & 0x7) {
             case 6: break; // Control.
-            case 5: // Server broadcast.
+            case 5: // Broadcast from a remote server.
                 if (! hc_nmea_active()) {
-                    hc_ntp_broadcast(head, &source, receive);
+                    hc_ntp_broadcastmsg (head, &source, receive);
                 }
                 break;
             case 4: break; // Server response.
             case 3: // Client request.
-                if (hc_nmea_active()) {
-                    hc_ntp_request (head, &source, receive);
+                if ((hc_ntp_status_db->stratum > 0)
+                        && hc_clock_synchronized()) {
+                    hc_ntp_requestmsg (head, &source, receive);
                 }
                 break;
             default:
@@ -428,9 +470,12 @@ void hc_ntp_periodic (const struct timeval *wakeup) {
             gettimeofday (&timestamp, NULL);
             hc_ntp_set_timestamp (&ntpBroadcast.transmit, &timestamp);
 
-            hc_broadcast_send ((char *)&ntpBroadcast, sizeof(ntpBroadcast));
+            hc_broadcast_send ((char *)&ntpBroadcast, sizeof(ntpBroadcast),
+                               (int *)(ntpBroadcast.refid));
+
             latestBroadcast = wakeup->tv_sec;
             hc_ntp_status_db->live.broadcast += 1;
+            hc_ntp_status_db->stratum = 1;
 
             if (hc_debug_enabled())
                 printf ("Sent broadcast packet at %ld.%03.3d: "
@@ -442,8 +487,19 @@ void hc_ntp_periodic (const struct timeval *wakeup) {
                         dispersion);
         }
         hc_ntp_status_db->mode = 'S';
+        hc_ntp_status_db->source = -1;
     } else {
         hc_ntp_status_db->mode = 'C';
+        if (hc_ntp_status_db->source >= 0) {
+            int source = hc_ntp_status_db->source;
+            time_t death = wakeup->tv_sec - (hc_ntp_period * 3);
+            if (hc_ntp_status_db->pool[source].local.tv_sec < death) {
+                hc_ntp_status_db->source = -1;
+            }
+        }
+        if (hc_ntp_status_db->source < 0) {
+            hc_ntp_status_db->stratum = 0;
+        }
     }
 }
 

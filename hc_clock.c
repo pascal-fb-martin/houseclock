@@ -216,10 +216,13 @@ void hc_clock_synchronize(const struct timeval *source,
     }
 
     // Accumulate an average drift, to eliminate one-time issues.
+    // (Do this only if the latency is greater than 0: this indicates
+    // a local clock source, sensitive to OS delays.)
     //
     hc_clock_status_db->accumulator += (int)drift;
     hc_clock_status_db->count += 1;
-    if (hc_clock_status_db->count < HC_CLOCK_LEARNING_PERIOD) return;
+    if ((latency > 0) &&
+        (hc_clock_status_db->count < HC_CLOCK_LEARNING_PERIOD)) return;
 
     // We reached the end of a learning period.
     // At this point we consider only the average drift

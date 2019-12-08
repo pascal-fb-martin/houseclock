@@ -16,6 +16,8 @@ clock: hc_clock.c
 clean:
 	rm -f *.o houseclock
 
+rebuild: clean all
+
 %.o: %.c
 	gcc -c -g -O -o $@ $<
 

@@ -49,13 +49,14 @@ struct hc_ntp_client {
 struct hc_ntp_server {
     struct timeval origin;
     struct timeval local;
-    int    count;
+    short  stratum;
     char   name[48];
 };
 
 typedef struct {
     char mode;
     char source;
+    short stratum;
     struct hc_ntp_server  pool[HC_NTP_POOL];
 
     struct hc_ntp_traffic live;

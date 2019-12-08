@@ -28,7 +28,7 @@
 
 int hc_broadcast_open (const char *service);
 
-void hc_broadcast_send (const char *data, int length);
+void hc_broadcast_send (const char *data, int length, int *address);
 
 void hc_broadcast_reply
         (const char *data, int length, const struct sockaddr_in *destination);
@@ -37,4 +37,6 @@ int  hc_broadcast_receive
         (char *buffer, int size, struct sockaddr_in *source);
 
 const char *hc_broadcast_format (const struct sockaddr_in *addr);
+
+int hc_broadcast_local (int address);
 
