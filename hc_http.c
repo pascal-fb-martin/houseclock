@@ -258,8 +258,8 @@ static const char *hc_http_ntp (const char *method, const char *uri,
     }
 
     snprintf (JsonBuffer, sizeof(JsonBuffer),
-              "{\"ntp\":{\"source\":%s%s%s,\"stratum\":%d",
-              quote, source, quote, ntp_db->stratum);
+              "{\"ntp\":{\"source\":%s%s%s,\"mode\":\"%c\",\"stratum\":%d",
+              quote, source, quote, ntp_db->mode, ntp_db->stratum);
 
     prefix = ",\"clients\":[";
     for (i = 0; i < HC_NTP_DEPTH; ++i) {
