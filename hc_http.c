@@ -237,34 +237,69 @@ static const char *hc_http_clockdrift (const char *method, const char *uri,
     return JsonBuffer;
 }
 
-static const char *hc_http_ntpclients (const char *method, const char *uri,
-                                       const char *data, int length) {
+static const char *hc_http_ntp (const char *method, const char *uri,
+                                const char *data, int length) {
 
     int i;
+    const char *source;
+    const char *quote = "\"";
     char buffer[1024];
     const char *prefix = "";
 
     hc_http_attach_ntp();
 
-    strncpy (JsonBuffer, "{\"ntp\":{\"clients\":[", sizeof(JsonBuffer));
+    if (ntp_db->stratum == 1) {
+        source = "GPS";
+    } else if (ntp_db->source >= 0) {
+        source = ntp_db->pool[ntp_db->source].name;
+    } else {
+        source = "null";
+        quote = "";
+    }
 
+    snprintf (JsonBuffer, sizeof(JsonBuffer),
+              "{\"ntp\":{\"source\":%s%s%s,\"stratum\":%d",
+              quote, source, quote, ntp_db->stratum);
+
+    prefix = ",\"clients\":[";
     for (i = 0; i < HC_NTP_DEPTH; ++i) {
         int delta;
-        if (ntp_db->clients[i].local.tv_sec == 0) continue;
-        delta = ((ntp_db->clients[i].local.tv_sec
-                   - ntp_db->clients[i].origin.tv_sec) * 1000)
-                + ((ntp_db->clients[i].local.tv_usec
-                   - ntp_db->clients[i].origin.tv_usec) / 1000);
+        struct hc_ntp_client *client = ntp_db->clients + i;
+
+        if (client->local.tv_sec == 0) continue;
+        delta = ((client->local.tv_sec - client->origin.tv_sec) * 1000)
+                + ((client->local.tv_usec - client->origin.tv_usec) / 1000);
         snprintf (buffer, sizeof(buffer),
            "%s{\"address\":\"%s\",\"timestamp\":%d.%03d,\"delta\":%d}",
            prefix,
-           hc_broadcast_format(&(ntp_db->clients[i].address)),
-           ntp_db->clients[i].local.tv_sec,
-           ntp_db->clients[i].local.tv_usec / 1000, delta);
+           hc_broadcast_format(&(client->address)),
+           client->local.tv_sec, client->local.tv_usec / 1000, delta);
         strcat (JsonBuffer, buffer);
         prefix = ",";
     }
-    strcat (JsonBuffer, "]}}");
+    if (prefix[1] == 0) strcat(JsonBuffer, "]");
+
+    prefix = ",\"servers\":[";
+    for (i = 0; i < HC_NTP_POOL; ++i) {
+        int delta;
+        struct hc_ntp_server *server = ntp_db->pool + i;
+
+        if (server->local.tv_sec == 0) continue;
+        delta = ((server->local.tv_sec - server->origin.tv_sec) * 1000)
+                + ((server->local.tv_usec - server->origin.tv_usec) / 1000);
+        snprintf (buffer, sizeof(buffer),
+           "%s{\"address\":\"%s\",\"timestamp\":%d.%03d,"
+               "\"delta\":%d,\"stratum\":%d}",
+           prefix,
+           server->name,
+           server->local.tv_sec,
+           server->local.tv_usec / 1000, delta, server->stratum);
+        strcat (JsonBuffer, buffer);
+        prefix = ",";
+    }
+    if (prefix[1] == 0) strcat(JsonBuffer, "]");
+    strcat (JsonBuffer, "}}");
+
     echttp_content_type_json();
     return JsonBuffer;
 }
@@ -280,7 +315,7 @@ void hc_http (int argc, const char **argv) {
     echttp_route_uri ("/status", hc_http_status);
     echttp_route_uri ("/clock/drift", hc_http_clockdrift);
     echttp_route_uri ("/gps", hc_http_gps);
-    echttp_route_uri ("/ntp/clients", hc_http_ntpclients);
+    echttp_route_uri ("/ntp", hc_http_ntp);
     echttp_static_route ("/ui", "/usr/local/lib/houseclock/public");
     echttp_background (&hc_background);
     echttp_loop();

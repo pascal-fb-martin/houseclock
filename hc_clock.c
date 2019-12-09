@@ -77,6 +77,7 @@
 
 static int clockShowDrift = 0;
 
+#define HC_CLOCK_DRIFT_DEPTH 120
 static hc_clock_status *hc_clock_status_db = 0;
 static int *hc_clock_drift_db = 0;
 
@@ -111,13 +112,13 @@ void hc_clock_initialize (int argc, const char **argv) {
     }
     precision = atoi(precision_option);
 
-    i = hc_db_new (HC_CLOCK_DRIFT, sizeof(int), 120);
+    i = hc_db_new (HC_CLOCK_DRIFT, sizeof(int), HC_CLOCK_DRIFT_DEPTH);
     if (i != 0) {
         fprintf (stderr, "cannot create %s: %s\n", HC_CLOCK_DRIFT, strerror(i));
         exit (1);
     }
     hc_clock_drift_db = (int *) hc_db_get (HC_CLOCK_DRIFT);
-    for (i = 0; i < 120; ++i) hc_clock_drift_db[i] = 0;
+    for (i = 0; i < HC_CLOCK_DRIFT_DEPTH; ++i) hc_clock_drift_db[i] = 0;
 
     i = hc_db_new (HC_CLOCK_STATUS, sizeof(hc_clock_status), 1);
     if (i != 0) {
@@ -198,12 +199,13 @@ void hc_clock_synchronize(const struct timeval *source,
 
     time_t absdrift = (drift < 0)? (0 - drift) : drift;
 
-    hc_clock_drift_db[source->tv_sec%120] = (int)drift;
+    hc_clock_drift_db[source->tv_sec%HC_CLOCK_DRIFT_DEPTH] = (int)drift;
     hc_clock_status_db->drift = (int)drift;
     hc_clock_status_db->timestamp = *local;
 
     if (clockShowDrift || hc_test_mode()) {
-        printf ("[%d] %8.3f\n", local->tv_sec%120, drift/1000.0);
+        printf ("[%d] %8.3f\n",
+                local->tv_sec%HC_CLOCK_DRIFT_DEPTH, drift/1000.0);
         if (hc_test_mode()) {
             if (absdrift < hc_clock_status_db->precision) {
                 hc_clock_status_db->synchronized = 1;
