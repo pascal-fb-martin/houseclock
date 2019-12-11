@@ -30,6 +30,8 @@ This software was not designed to act as a mid-tier server, i.e. it will answer 
 
 When no GPS device is available, the software acts as a NTP broadcast client, listening to NTP broadcast messages. In this mode it will select a specific server as time source and stick to this server as long as it operates. If the current time source disappears, the client will switch to another available time source.
 
+In client mode, and while synchronized to a NTP broadcast server, the software acts as a NTP unicast server, stratum level set to the broadcast server's level plus one (i.e. stratum 2 is the broadcast server is stratum 1).
+
 # Installation
 
 * Clone this GitHub repository.
