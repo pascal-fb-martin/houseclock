@@ -24,8 +24,6 @@ Tests on a NTP-synchronized workstation with the VK-162 Usb GPS Navigation Modul
 
 This software runs as a stratum 1 time server if a GPS device is detected and a fix was obtained. When server, it answers to client requests and sends periodic NTP messages in local broadcast mode.
 
-This software was not designed to act as a mid-tier server, i.e. it will answer to client requests _only_ when acting as a stratum 1 server. It will never redistribute time obtained from a remote NTP server.
-
 # Client Mode
 
 When no GPS device is available, the software acts as a NTP broadcast client, listening to NTP broadcast messages. In this mode it will select a specific server as time source and stick to this server as long as it operates. If the current time source disappears, the client will switch to another available time source.
