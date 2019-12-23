@@ -226,7 +226,7 @@ static void hc_ntp_broadcastmsg (const ntpHeaderV3 *head,
                                  const struct sockaddr_in *source,
                                  const struct timeval *receive) {
 
-    int i, sender, available, weak;
+    int i, sender, available, weakest, worst;
     time_t death = receive->tv_sec - (hc_ntp_period * 3);
     const char *name = hc_broadcast_format(source);
     int ipaddress = source->sin_addr.s_addr;
@@ -249,9 +249,12 @@ static void hc_ntp_broadcastmsg (const ntpHeaderV3 *head,
     hc_ntp_status_db->live.broadcast += 1;
 
     // Search if that broadcasting server is already known.
-    // This loop also looks for available slots and remove dead servers.
+    // This loop also looks for available slots, remove dead servers
+    // and detect the time server with the highest stratum (weakest),
+    // which could be sacrified if we just found a better time server.
     //
-    weak = -1;
+    weakest = -1;
+    worst = head->stratum;
     sender = -1;
     available = -1;
     for (i = 0; i < HC_NTP_POOL; ++i) {
@@ -265,26 +268,30 @@ static void hc_ntp_broadcastmsg (const ntpHeaderV3 *head,
             hc_ntp_status_db->pool[i].stratum = 0;
 
             if (available < 0) available = i; // Good slot for a new server.
-        } else if (hc_ntp_status_db->pool[i].stratum > head->stratum) {
-            if (weak < 0) weak = i; // This is a lower quality server.
+        } else if (hc_ntp_status_db->pool[i].stratum > worst) {
+            weakest = i; // This is the lowest quality server.
+            worst = hc_ntp_status_db->pool[i].stratum;
         }
     }
 
-    // If not known yet it goes to an empty slot, replaces a dead server
-    // or else replaces a lower-quality server.
+    // If that time server was not known yet it goes to an empty slot,
+    // replaces a dead server or else replaces the lowest-quality server.
     //
     if (sender < 0) {
         char *column;
 
         if (available < 0) {
-            if (weak < 0) return; // Too many good NTP servers?
-            available = weak;
+            if (weakest < 0) return; // Too many good NTP servers?
+            available = weakest;
+            if (hc_ntp_status_db->source == weakest) {
+                hc_ntp_status_db->source = -1;
+            }
         }
         sender = available;
         strncpy (hc_ntp_status_db->pool[sender].name,
                  name, sizeof(hc_ntp_status_db->pool[0].name));
         column = strchr (hc_ntp_status_db->pool[sender].name, ':');
-        if (column) *column = 0; // No need for the port number anymore.
+        if (column) *column = 0; // No need for the sender port number anymore.
         if (hc_debug_enabled())
             printf ("Assigned slot %d (current source: %d)\n",
                     sender, hc_ntp_status_db->source);

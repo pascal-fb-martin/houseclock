@@ -203,13 +203,14 @@ int hc_broadcast_open (const char *service) {
         serverport = ntohs(entry->s_port);
     }
 
+    endservent();
+
     if (serverport <= 0) {
         fprintf (stderr, "invalid service name %s\n", service);
         exit (1);
     }
 
-    DEBUG printf ("Opening UDP port %d (name: %s)\n",
-                  serverport, (entry == NULL)?"(null)":entry->s_name);
+    DEBUG printf ("Opening UDP port %d (name: %s)\n", serverport, service);
 
     udpserver = hc_broadcast_socket(INADDR_ANY, serverport);
 

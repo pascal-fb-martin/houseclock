@@ -143,8 +143,8 @@ static const char *hc_http_status (const char *method, const char *uri,
               ",\"precision\":%d,\"drift\":%d,\"avgdrift\":%d"
               ",\"timestamp\":%zd.%03d}"
               ",\"learn\":{\"count\":%d,\"accumulator\":%d}"
-              ",\"ntp\":{\"mode\":\"%c\",\"received\":%d,\"processed\":%d"
-              ",\"broadcast\":%d}"
+              ",\"ntp\":{\"mode\":\"%c\",\"stratum\":%d"
+              ",\"received\":%d,\"processed\":%d,\"broadcast\":%d}"
               ",\"mem\":{\"space\":%d,\"used\":%d}}",
               nmea_db->fix?"true":"false",
               (unsigned int)nmea_db->fixtime,
@@ -161,6 +161,7 @@ static const char *hc_http_status (const char *method, const char *uri,
               clock_db->timestamp.tv_usec/1000,
               clock_db->count, clock_db->accumulator,
               ntp_db->mode,
+              ntp_db->stratum,
               ntp_db->latest.received,
               ntp_db->latest.client,
               ntp_db->latest.broadcast,

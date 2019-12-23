@@ -452,6 +452,9 @@ int hc_nmea_process (const struct timeval *received) {
     ssize_t length;
     int sentences [1024]; // Large enough to never overflow.
 
+    if (gpsCount == sizeof(gpsBuffer)) {
+        gpsCount = 0; // Buffer should never be full: forget accumulated data.
+    }
     length = read (gpsTty, gpsBuffer+gpsCount, sizeof(gpsBuffer)-gpsCount);
     if (length <= 0) {
         hc_nmea_reset();
@@ -459,6 +462,8 @@ int hc_nmea_process (const struct timeval *received) {
     }
     gpsCount += length;
 
+    // Calculate timing.
+    //
     interval = (received->tv_usec - previous.tv_usec) / 1000 +
                (received->tv_sec - previous.tv_sec) * 1000;
 
@@ -495,8 +500,9 @@ int hc_nmea_process (const struct timeval *received) {
     }
     previous = *received;
 
+    // Analyze the NMEA data we have accumulated.
+    //
     leftover = hc_nmea_splitlines (sentences);
-    if (leftover == 0) return gpsTty;
 
     for (i = 0; sentences[i] >= 0; ++i) {
 
@@ -533,9 +539,11 @@ int hc_nmea_process (const struct timeval *received) {
 
     // Move the leftover to the beginning of the buffer, for future decoding.
 
-    gpsCount -= leftover;
-    if (gpsCount > 0)
-        memmove (gpsBuffer, gpsBuffer+leftover, gpsCount);
+    if (leftover > 0) {
+        gpsCount -= leftover;
+        if (gpsCount > 0)
+            memmove (gpsBuffer, gpsBuffer+leftover, gpsCount);
+    }
 
     return gpsTty;
 }
