@@ -142,7 +142,7 @@ static const char *hc_http_status (const char *method, const char *uri,
               ",\"clock\":{\"synchronized\":%s,\"reference\":%zd.%03d"
               ",\"precision\":%d,\"drift\":%d,\"avgdrift\":%d"
               ",\"timestamp\":%zd.%03d}"
-              ",\"ntp\":{\"mode\":\"%c\",\"stratum\":%d"
+              ",\"ntp\":{\"mode\":\"%c\",\"stratum\":%d}"
               ",\"mem\":{\"space\":%d,\"used\":%d}}",
               nmea_db->fix?"true":"false",
               (unsigned int)nmea_db->fixtime,
