@@ -213,14 +213,14 @@ static const char *hc_http_status (const char *method, const char *uri,
         prefix = ",";
     }
 
-    added = hc_http_status_clock(cursor, size, ",");
+    added = hc_http_status_clock(cursor, size, prefix);
     if (added > 0) {
         cursor += added;
         size -= added;
         prefix = ",";
     }
 
-    added = hc_http_status_ntp(cursor, size, ",");
+    added = hc_http_status_ntp(cursor, size, prefix);
     if (added > 0) {
         cursor += added;
         size -= added;

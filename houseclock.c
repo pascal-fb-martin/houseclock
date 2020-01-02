@@ -43,8 +43,10 @@
 #include <stdlib.h>
 #include <sys/select.h>
 #include <sys/types.h>
+#include <sys/stat.h>
 #include <unistd.h>
 #include <stdio.h>
+#include <fcntl.h>
 #include <errno.h>
 
 #include "houseclock.h"
@@ -129,6 +131,13 @@ int main (int argc, const char **argv) {
     time_t last_period = 0;
     struct timeval now;
     const char *dbsizestr = "0";
+
+    // These strange statements are to make sure that fds 0 to 2 are
+    // reserved, since this application might output some errors.
+    // 3 descriptors are wasted if 0, 1 and 2 are already open. No big deal.
+    //
+    open ("/dev/null", O_RDONLY);
+    dup(open ("/dev/null", O_WRONLY));
 
     int i;
     for (i = 1; i < argc; ++i) {
