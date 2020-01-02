@@ -277,7 +277,7 @@ static const char *hc_http_gps (const char *method, const char *uri,
         has_sentence = 1;
     }
     if (has_sentence) strcat (JsonBuffer, "]");
-    strcat (JsonBuffer, "}");
+    strcat (JsonBuffer, "}}");
 
     echttp_content_type_json();
     return JsonBuffer;
