@@ -122,6 +122,7 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <time.h>
+#include <termios.h>
 
 #include "houseclock.h"
 #include "hc_db.h"
@@ -213,6 +214,16 @@ int hc_nmea_initialize (int argc, const char **argv) {
 
     hc_nmea_reset();
     gpsTty = open(gpsDevice, O_RDONLY);
+
+    // Remove echo of characters from the GPS device.
+    if (gpsTty >= 0) {
+        struct termios options;
+        int status = tcgetattr(gpsTty, &options);
+        if (status == 0) {
+            options.c_lflag &= (~(ECHO+ECHONL));
+            tcsetattr(gpsTty, TCSANOW, &options);
+        }
+    }
 
     gpsInitialized = time(0);
     return gpsTty;
