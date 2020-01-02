@@ -257,7 +257,7 @@ static const char *hc_http_gps (const char *method, const char *uri,
             strcat (JsonBuffer, nmea_db->text[i].line);
             prefix = "\",\"";
         }
-        strcat (JsonBuffer, "\"],");
+        strcat (JsonBuffer, "\"]");
         prefix = ",\"history\":[";
     } else {
         prefix = "\"history\":[";
