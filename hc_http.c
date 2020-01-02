@@ -139,16 +139,19 @@ static size_t hc_http_status_gps (char *cursor, int size, const char *prefix) {
 
     if (nmea_db->gpsdate[0] > 0) date = nmea_db->gpsdate;
 
-    snprintf (cursor, size,
-              "%s\"gps\":{\"fix\":%s, \"fixtime\":%u"
-              ",\"gpstime\":\"%s\",\"gpsdate\":\"%4d%2.2s%2.2s\""
-              ",\"latitude\":%s,\"longitude\":%s}",
-              prefix,
-              nmea_db->fix?"true":"false",
-              (unsigned int)nmea_db->fixtime,
-              nmea_db->gpstime,
-              2000 + (date[4]-'0')*10 + (date[5]-'0'), date+2, date,
-              latitude, longitude);
+    if (nmea_db->fix) {
+       snprintf (cursor, size,
+                 "%s\"gps\":{\"fix\":true, \"fixtime\":%u"
+                 ",\"gpstime\":\"%s\",\"gpsdate\":\"%4d%2.2s%2.2s\""
+                 ",\"latitude\":%s,\"longitude\":%s}",
+                 prefix,
+                 (unsigned int)nmea_db->fixtime,
+                 nmea_db->gpstime,
+                 2000 + (date[4]-'0')*10 + (date[5]-'0'), date+2, date,
+                 latitude, longitude);
+    } else {
+       snprintf (cursor, size, "%s\"gps\":{\"fix\":false}", prefix);
+    }
 
     return strlen(cursor);
 }
@@ -239,32 +242,42 @@ static const char *hc_http_gps (const char *method, const char *uri,
                                 const char *data, int length) {
     const char *prefix = "";
     int i;
+    int has_sentence = 0;
     char buffer[1024];
 
     if (! hc_http_attach_nmea()) return "";
 
-    strncpy (JsonBuffer, "{\"text\":[\"", sizeof(JsonBuffer));
-    for (i = 0; i < nmea_db->textcount; ++i) {
-        strcat (JsonBuffer, prefix);
-        strcat (JsonBuffer, nmea_db->text[i].line);
-        prefix = "\",\"";
-    }
-    strcat (JsonBuffer, "\"]");
+    snprintf (JsonBuffer, sizeof(JsonBuffer), "{\"gps\":{\"fix\":%s",
+              nmea_db->fix ? "true" : "false");
 
-    prefix = ",\"history\":[{\"sentence\":\"";
+    if (nmea_db->textcount > 0) {
+        prefix = ",\"text\":[\"";
+        for (i = 0; i < nmea_db->textcount; ++i) {
+            strcat (JsonBuffer, prefix);
+            strcat (JsonBuffer, nmea_db->text[i].line);
+            prefix = "\",\"";
+        }
+        strcat (JsonBuffer, "\"],");
+        prefix = ",\"history\":[";
+    } else {
+        prefix = "\"history\":[";
+    }
+
     for (i = 0; i < HC_NMEA_DEPTH; ++i) {
         gpsSentence *item = nmea_db->history + i;
         if (item->timing.tv_sec == 0) continue;
         snprintf (buffer, sizeof(buffer),
-                  "%s%s\",\"timestamp\":[%u,%d],\"flags\":%d}",
+                  "%s{\"sentence\":\"%s\",\"timestamp\":[%u,%d],\"flags\":%d}",
                   prefix,
                   item->sentence,
                   item->timing.tv_sec, item->timing.tv_usec / 1000,
                   item->flags);
         strcat (JsonBuffer, buffer);
-        prefix = ",{\"sentence\":\"";
+        prefix = ",";
+        has_sentence = 1;
     }
-    strcat (JsonBuffer, "]}");
+    if (has_sentence) strcat (JsonBuffer, "]");
+    strcat (JsonBuffer, "}");
 
     echttp_content_type_json();
     return JsonBuffer;
