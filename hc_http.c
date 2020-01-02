@@ -48,6 +48,7 @@
 static pid_t parent;
 
 
+static hc_clock_status *clock_db = 0;
 static hc_nmea_status *nmea_db = 0;
 static hc_ntp_status *ntp_db = 0;
 
@@ -66,50 +67,11 @@ static void *hc_http_attach (const char *name) {
     return p;
 }
 
-static void *hc_http_attach_nmea (void) {
-
-    if (nmea_db == 0) {
-        nmea_db = (hc_nmea_status *) hc_http_attach (HC_NMEA_STATUS);
-        if (nmea_db == 0) return "";
-        if (hc_db_get_count (HC_NMEA_STATUS) != 1
-            || hc_db_get_size (HC_NMEA_STATUS) != sizeof(hc_nmea_status)) {
-            fprintf (stderr, "wrong data structure for table %s\n",
-                     HC_NMEA_STATUS);
-            exit (1);
-        }
-    }
-}
-
-static void *hc_http_attach_ntp (void) {
-
-    if (ntp_db == 0) {
-        ntp_db = (hc_ntp_status *) hc_http_attach (HC_NTP_STATUS);
-        if (ntp_db == 0) return "";
-        if (hc_db_get_count (HC_NTP_STATUS) != 1
-            || hc_db_get_size (HC_NTP_STATUS) != sizeof(hc_ntp_status)) {
-            fprintf (stderr, "wrong data structure for table %s\n",
-                     HC_NTP_STATUS);
-            exit (1);
-        }
-    }
-}
-
-
-static const char *hc_http_status (const char *method, const char *uri,
-                                   const char *data, int length) {
-    static hc_clock_status *clock_db = 0;
-
-    char latitude[20];
-    char longitude[20];
-    const char *date = "010100";
-    const char *source;
-    const char *quote = "\"";
-
-    hc_http_attach_nmea();
+static int hc_http_attach_clock (void) {
 
     if (clock_db == 0) {
         clock_db = (hc_clock_status *) hc_http_attach (HC_CLOCK_STATUS);
-        if (clock_db == 0) return "";
+        if (clock_db == 0) return 0;
         if (hc_db_get_count (HC_CLOCK_STATUS) != 1
             || hc_db_get_size (HC_CLOCK_STATUS) != sizeof(hc_clock_status)) {
             fprintf (stderr, "wrong data structure for table %s\n",
@@ -117,17 +79,47 @@ static const char *hc_http_status (const char *method, const char *uri,
             exit (1);
         }
     }
+    return 1;
+}
 
-    hc_http_attach_ntp();
+static int hc_http_attach_nmea (void) {
 
-    if (ntp_db->stratum == 1) {
-        source = "GPS";
-    } else if (ntp_db->source >= 0) {
-        source = ntp_db->pool[ntp_db->source].name;
-    } else {
-        source = "null";
-        quote = "";
+    if (nmea_db == 0) {
+        nmea_db = (hc_nmea_status *) hc_http_attach (HC_NMEA_STATUS);
+        if (nmea_db == 0) return 0;
+        if (hc_db_get_count (HC_NMEA_STATUS) != 1
+            || hc_db_get_size (HC_NMEA_STATUS) != sizeof(hc_nmea_status)) {
+            fprintf (stderr, "wrong data structure for table %s\n",
+                     HC_NMEA_STATUS);
+            exit (1);
+        }
     }
+    return 1;
+}
+
+static int hc_http_attach_ntp (void) {
+
+    if (ntp_db == 0) {
+        ntp_db = (hc_ntp_status *) hc_http_attach (HC_NTP_STATUS);
+        if (ntp_db == 0) return 0;
+        if (hc_db_get_count (HC_NTP_STATUS) != 1
+            || hc_db_get_size (HC_NTP_STATUS) != sizeof(hc_ntp_status)) {
+            fprintf (stderr, "wrong data structure for table %s\n",
+                     HC_NTP_STATUS);
+            exit (1);
+        }
+    }
+    return 1;
+}
+
+
+static size_t hc_http_status_gps (char *cursor, int size, const char *prefix) {
+
+    char latitude[20];
+    char longitude[20];
+    const char *date = "010100";
+
+    if (! hc_http_attach_nmea()) return 0;
 
     // This conversion is not made when decoding the NMEA stream to avoid
     // consuming CPU in the high-priority time synchronization process.
@@ -147,20 +139,28 @@ static const char *hc_http_status (const char *method, const char *uri,
 
     if (nmea_db->gpsdate[0] > 0) date = nmea_db->gpsdate;
 
-    snprintf (JsonBuffer, sizeof(JsonBuffer),
-              "{\"gps\":{\"fix\":%s, \"fixtime\":%u"
+    snprintf (cursor, size,
+              "%s\"gps\":{\"fix\":%s, \"fixtime\":%u"
               ",\"gpstime\":\"%s\",\"gpsdate\":\"%4d%2.2s%2.2s\""
-              ",\"latitude\":%s,\"longitude\":%s}"
-              ",\"clock\":{\"synchronized\":%s,\"reference\":%zd.%03d"
-              ",\"precision\":%d,\"drift\":%d,\"avgdrift\":%d"
-              ",\"timestamp\":%zd.%03d}"
-              ",\"ntp\":{\"source\":%s%s%s,\"mode\":\"%c\",\"stratum\":%d}",
-              ",\"mem\":{\"space\":%d,\"used\":%d}}",
+              ",\"latitude\":%s,\"longitude\":%s}",
+              prefix,
               nmea_db->fix?"true":"false",
               (unsigned int)nmea_db->fixtime,
               nmea_db->gpstime,
               2000 + (date[4]-'0')*10 + (date[5]-'0'), date+2, date,
-              latitude, longitude,
+              latitude, longitude);
+
+    return strlen(cursor);
+}
+
+static size_t hc_http_status_clock (char *cursor, int size, const char *prefix) {
+    if (! hc_http_attach_clock()) return 0;
+
+    snprintf (cursor, size,
+              "%s\"clock\":{\"synchronized\":%s,\"reference\":%zd.%03d"
+              ",\"precision\":%d,\"drift\":%d,\"avgdrift\":%d"
+              ",\"timestamp\":%zd.%03d}",
+              prefix,
               clock_db->synchronized?"true":"false",
               (size_t)clock_db->reference.tv_sec,
               clock_db->reference.tv_usec/1000,
@@ -168,11 +168,68 @@ static const char *hc_http_status (const char *method, const char *uri,
               clock_db->drift,
               clock_db->avgdrift,
               (size_t) (clock_db->timestamp.tv_sec),
-              clock_db->timestamp.tv_usec/1000,
+              clock_db->timestamp.tv_usec/1000);
+
+    return strlen(cursor);
+}
+
+static size_t hc_http_status_ntp (char *cursor, int size, const char *prefix) {
+
+    const char *source;
+    const char *quote = "\"";
+
+    if (!hc_http_attach_ntp()) return 0;
+
+    if (ntp_db->stratum == 1) {
+        source = "GPS";
+    } else if (ntp_db->source >= 0) {
+        source = ntp_db->pool[ntp_db->source].name;
+    } else {
+        source = "null";
+        quote = "";
+    }
+
+    snprintf (cursor, size,
+              "%s\"ntp\":{\"source\":%s%s%s,\"mode\":\"%c\",\"stratum\":%d}",
+              prefix,
               quote, source, quote,
               ntp_db->mode,
-              ntp_db->stratum,
-              hc_db_get_space(), hc_db_get_used());
+              ntp_db->stratum);
+
+    return strlen(cursor);
+}
+
+static const char *hc_http_status (const char *method, const char *uri,
+                                   const char *data, int length) {
+    char *cursor = JsonBuffer;
+    int size = sizeof(JsonBuffer);
+    const char *prefix = "{";
+    int added;
+
+    added = hc_http_status_gps(cursor, size, prefix);
+    if (added > 0) {
+        cursor += added;
+        size -= added;
+        prefix = ",";
+    }
+
+    added = hc_http_status_clock(cursor, size, ",");
+    if (added > 0) {
+        cursor += added;
+        size -= added;
+        prefix = ",";
+    }
+
+    added = hc_http_status_ntp(cursor, size, ",");
+    if (added > 0) {
+        cursor += added;
+        size -= added;
+        prefix = ",";
+    }
+
+    snprintf (cursor, size,
+              "%s\"mem\":{\"space\":%d,\"used\":%d}}",
+              prefix, hc_db_get_space(), hc_db_get_used());
 
     echttp_content_type_json();
     return JsonBuffer;
@@ -184,7 +241,7 @@ static const char *hc_http_gps (const char *method, const char *uri,
     int i;
     char buffer[1024];
 
-    hc_http_attach_nmea();
+    if (! hc_http_attach_nmea()) return "";
 
     strncpy (JsonBuffer, "{\"text\":[\"", sizeof(JsonBuffer));
     for (i = 0; i < nmea_db->textcount; ++i) {
@@ -249,25 +306,13 @@ static const char *hc_http_ntp (const char *method, const char *uri,
                                 const char *data, int length) {
 
     int i;
-    const char *source;
-    const char *quote = "\"";
     char buffer[1024];
     const char *prefix = "";
 
-    hc_http_attach_ntp();
-
-    if (ntp_db->stratum == 1) {
-        source = "GPS";
-    } else if (ntp_db->source >= 0) {
-        source = ntp_db->pool[ntp_db->source].name;
-    } else {
-        source = "null";
-        quote = "";
-    }
+    if (! hc_http_attach_ntp()) return "";
 
     snprintf (JsonBuffer, sizeof(JsonBuffer),
-              "{\"ntp\":{\"source\":%s%s%s,\"mode\":\"%c\",\"stratum\":%d",
-              quote, source, quote, ntp_db->mode, ntp_db->stratum);
+              "{\"ntp\":{\"mode\":\"%c\"", ntp_db->mode);
 
     prefix = ",\"clients\":[";
     for (i = 0; i < HC_NTP_DEPTH; ++i) {
