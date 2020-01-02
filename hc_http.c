@@ -94,6 +94,7 @@ static void *hc_http_attach_ntp (void) {
     }
 }
 
+
 static const char *hc_http_status (const char *method, const char *uri,
                                    const char *data, int length) {
     static hc_clock_status *clock_db = 0;
@@ -101,6 +102,8 @@ static const char *hc_http_status (const char *method, const char *uri,
     char latitude[20];
     char longitude[20];
     const char *date = "010100";
+    const char *source;
+    const char *quote = "\"";
 
     hc_http_attach_nmea();
 
@@ -116,6 +119,15 @@ static const char *hc_http_status (const char *method, const char *uri,
     }
 
     hc_http_attach_ntp();
+
+    if (ntp_db->stratum == 1) {
+        source = "GPS";
+    } else if (ntp_db->source >= 0) {
+        source = ntp_db->pool[ntp_db->source].name;
+    } else {
+        source = "null";
+        quote = "";
+    }
 
     // This conversion is not made when decoding the NMEA stream to avoid
     // consuming CPU in the high-priority time synchronization process.
@@ -142,7 +154,7 @@ static const char *hc_http_status (const char *method, const char *uri,
               ",\"clock\":{\"synchronized\":%s,\"reference\":%zd.%03d"
               ",\"precision\":%d,\"drift\":%d,\"avgdrift\":%d"
               ",\"timestamp\":%zd.%03d}"
-              ",\"ntp\":{\"mode\":\"%c\",\"stratum\":%d}"
+              ",\"ntp\":{\"source\":%s%s%s,\"mode\":\"%c\",\"stratum\":%d}",
               ",\"mem\":{\"space\":%d,\"used\":%d}}",
               nmea_db->fix?"true":"false",
               (unsigned int)nmea_db->fixtime,
@@ -157,6 +169,7 @@ static const char *hc_http_status (const char *method, const char *uri,
               clock_db->avgdrift,
               (size_t) (clock_db->timestamp.tv_sec),
               clock_db->timestamp.tv_usec/1000,
+              quote, source, quote,
               ntp_db->mode,
               ntp_db->stratum,
               hc_db_get_space(), hc_db_get_used());
