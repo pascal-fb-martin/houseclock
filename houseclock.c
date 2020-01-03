@@ -44,6 +44,7 @@
 #include <sys/select.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <sys/wait.h>
 #include <unistd.h>
 #include <stdio.h>
 #include <fcntl.h>
@@ -221,6 +222,11 @@ int main (int argc, const char **argv) {
                 hc_nmea_periodic (&now);
             }
             last_period = now.tv_sec;
+
+            int wstatus;
+            if (waitpid (httpid, &wstatus, WNOHANG) == httpid) {
+                exit(1);
+            }
         }
     }
 }
