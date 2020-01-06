@@ -37,6 +37,7 @@ install:
 	chown root:root /usr/local/bin/houseclock /etc/init.d/houseclock
 	chmod 755 /usr/local/bin/houseclock /etc/init.d/houseclock
 	if [ -e /etc/init.d/ntp ] ; then systemctl stop ntp ; systemctl disable ntp ; fi
+	if [ -e /etc/init.d/chrony ] ; then systemctl stop chrony ; systemctl disable chrony ; fi
 	systemctl daemon-reload
 	systemctl enable houseclock
 	systemctl start houseclock
@@ -48,4 +49,5 @@ uninstall:
 	rm -f /etc/init.d/houseclock
 	systemctl daemon-reload
 	if [ -e /etc/init.d/ntp ] ; then systemctl enable ntp ; systemctl start ntp ; fi
+	if [ -e /etc/init.d/chrony ] ; then systemctl enable chrony ; systemctl start chrony ; fi
 
