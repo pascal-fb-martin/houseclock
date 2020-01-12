@@ -258,10 +258,8 @@ static const char *hc_http_gps (const char *method, const char *uri,
             prefix = "\",\"";
         }
         strcat (JsonBuffer, "\"]");
-        prefix = ",\"history\":[";
-    } else {
-        prefix = "\"history\":[";
     }
+    prefix = ",\"history\":[";
 
     for (i = 0; i < HC_NMEA_DEPTH; ++i) {
         gpsSentence *item = nmea_db->history + i;
