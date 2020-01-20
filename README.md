@@ -36,7 +36,7 @@ In client mode, and while synchronized to a NTP broadcast server, the software a
 * make
 * sudo make install
 
-This installs HouseClock as a service (for Debian's systemd) and starts it. If ntpd was installed, this stops and disables ntp.
+This installs HouseClock as a service (for Debian's systemd) and starts it. If ntpd or chrony was installed, this stops and disables it.
 
 # Configuration
 
