@@ -69,8 +69,10 @@
  *      -gps=<dev>      Name of the system device to read the NMEA data from.
  *      -latency=<N>    Delay between the GPS fix and the 1st sentence (ms).
  *      -burst          Use burst start as the GPS fix timing reference.
+ *      -baud=<N>       GPS line baud speed.
  *
- *    The default GPS device is /dev/ttyACM0.
+ *    The default GPS device is /dev/ttyACM0. If no baud option is used,
+ *    the default OS configuration is used.
  *
  *    The latency depends on the GPS device. It can be estimated by using
  *    the options -drift and -latency=0, and then estimating the average
@@ -122,11 +124,11 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <time.h>
-#include <termios.h>
 
 #include "houseclock.h"
 #include "hc_db.h"
 #include "hc_clock.h"
+#include "hc_tty.h"
 #include "hc_nmea.h"
 
 static int gpsLatency;
@@ -149,6 +151,7 @@ static int gpsTty = -1;
 static int gpsUseBurst = 0;
 static int gpsPrivacy = 0;
 static int gpsShowNmea = 0;
+static int gpsSpeed = 0;
 
 static time_t gpsInitialized = 0;
 
@@ -157,9 +160,10 @@ static hc_nmea_status *hc_nmea_status_db = 0;
 const char *hc_nmea_help (int level) {
 
     static const char *nmeaHelp[] = {
-        " [-gps=DEV] [-latency=N] [-burst] [-privacy]",
+        " [-gps=DEV] [-baud=N] [-latency=N] [-burst] [-privacy]",
         "-gps=DEV:     device from which to read the NMEA data (/dev/ttyACM0).",
         "-latency=N:   delay between the GPS fix and the 1st NMEA sentence (70).",
+        "-baud=N:      GPS device's baud speed (default: use OS default).",
         "-show-nmea:   trace NMEA sentences.",
         "-burst:       Use burst start as the GPS timing reference",
         "-privacy:     do not export location",
@@ -189,18 +193,21 @@ int hc_nmea_initialize (int argc, const char **argv) {
 
     int i;
     const char *latency_option = "70";
+    const char *speed_option = "0";
 
     gpsDevice = "/dev/ttyACM0";
     gpsUseBurst = 0;
 
     for (i = 1; i < argc; ++i) {
         hc_match ("-gps=", argv[i], &gpsDevice);
+        hc_match ("-baud=", argv[i], &speed_option);
         hc_match ("-latency=", argv[i], &latency_option);
         if (hc_present ("-burst", argv[i])) gpsUseBurst = 1;
         if (hc_present ("-privacy", argv[i])) gpsPrivacy = 1;
         if (hc_present ("-show-nmea", argv[i])) gpsShowNmea = 1;
     }
     gpsLatency = atoi(latency_option);
+    gpsSpeed = atoi(speed_option);
 
     if (hc_nmea_status_db == 0) {
         i = hc_db_new (HC_NMEA_STATUS, sizeof(hc_nmea_status), 1);
@@ -217,12 +224,7 @@ int hc_nmea_initialize (int argc, const char **argv) {
 
     // Remove echo of characters from the GPS device.
     if (gpsTty >= 0) {
-        struct termios options;
-        int status = tcgetattr(gpsTty, &options);
-        if (status == 0) {
-            options.c_lflag &= (~(ECHO+ECHONL));
-            tcsetattr(gpsTty, TCSANOW, &options);
-        }
+        hc_tty_set (gpsTty, gpsSpeed);
     }
 
     gpsInitialized = time(0);
