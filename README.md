@@ -54,10 +54,10 @@ houseclock -h
 
 The service options can be configured by creating file /etc/default/houseclock and set the following shell variables:
 
-**GPS_OPTS**: GPS related options.
-**NTP_OPTS**: NTP related options.
-**HTTP_OPTS**: HTTP related options.
-**OTHER_OPTS**: general purpose options.
+* **GPS_OPTS**: GPS related options.
+* **NTP_OPTS**: NTP related options.
+* **HTTP_OPTS**: HTTP related options.
+* **OTHER_OPTS**: general purpose options.
 
 For example:
 ```
