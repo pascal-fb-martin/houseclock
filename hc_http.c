@@ -349,8 +349,8 @@ static const char *hc_http_ntp (const char *method, const char *uri,
         struct hc_ntp_server *server = ntp_db->pool + i;
 
         if (server->local.tv_sec == 0) continue;
-        delta = ((server->local.tv_sec - server->origin.tv_sec) * 1000)
-                + ((server->local.tv_usec - server->origin.tv_usec) / 1000);
+        delta = ((server->origin.tv_sec - server->local.tv_sec) * 1000)
+                + ((server->origin.tv_usec - server->local.tv_usec) / 1000);
         snprintf (buffer, sizeof(buffer),
            "%s{\"address\":\"%s\",\"timestamp\":%d.%03d,"
                "\"delta\":%d,\"stratum\":%d}",
