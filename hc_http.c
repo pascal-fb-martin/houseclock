@@ -376,6 +376,41 @@ static const char *hc_http_ntp (const char *method, const char *uri,
     return JsonBuffer;
 }
 
+static const char *hc_http_traffic (const char *method, const char *uri,
+                                    const char *data, int length) {
+
+    int i;
+    char buffer[1024];
+    const char *prefix;
+
+    if (! hc_http_attach_ntp()) return "";
+
+    snprintf (JsonBuffer, sizeof(JsonBuffer),
+              "{\"ntp\":{\"mode\":\"%c\"", ntp_db->mode);
+
+    prefix = ",\"traffic\":[";
+    for (i = 0; i < HC_NTP_DEPTH; ++i) {
+        struct hc_ntp_traffic *sample = ntp_db->history + i;
+
+        if (sample->timestamp == 0) continue;
+
+        snprintf (buffer, sizeof(buffer),
+           "%s{\"timestamp\":%d.%03d,"
+           "\"received\":%d,"
+           "\"client\":%d,"
+           "\"broadcast\":%d}",
+           prefix, sample->timestamp,
+           sample->received, sample->client, sample->broadcast);
+        strcat (JsonBuffer, buffer);
+        prefix = ",";
+    }
+    if (prefix[1] == 0) strcat(JsonBuffer, "]");
+    strcat (JsonBuffer, "}}");
+
+    echttp_content_type_json();
+    return JsonBuffer;
+}
+
 const char *hc_http_help (int level) {
     return echttp_help(level);
 }
@@ -385,6 +420,7 @@ void hc_http (int argc, const char **argv) {
     if (echttp_open (argc, argv) <= 0) exit(1);
 
     echttp_route_uri ("/status", hc_http_status);
+    echttp_route_uri ("/traffic", hc_http_traffic);
     echttp_route_uri ("/clock/drift", hc_http_clockdrift);
     echttp_route_uri ("/gps", hc_http_gps);
     echttp_route_uri ("/ntp", hc_http_ntp);
