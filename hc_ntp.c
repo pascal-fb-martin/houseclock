@@ -465,6 +465,10 @@ void hc_ntp_periodic (const struct timeval *wakeup) {
         hc_ntp_status_db->live.timestamp = latestPeriod * 10;
         hc_ntp_status_db->latest = hc_ntp_status_db->live;
         hc_ntp_status_db->history[slot] = hc_ntp_status_db->live;
+
+        hc_ntp_status_db->live.received = 0;
+        hc_ntp_status_db->live.client = 0;
+        hc_ntp_status_db->live.broadcast = 0;
         latestPeriod += 1;
     }
 
