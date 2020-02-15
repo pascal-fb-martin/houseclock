@@ -353,11 +353,15 @@ static const char *hc_http_ntp (const char *method, const char *uri,
                 + ((server->origin.tv_usec - server->local.tv_usec) / 1000);
         snprintf (buffer, sizeof(buffer),
            "%s{\"address\":\"%s\",\"timestamp\":%d.%03d,"
+               "\"remote\":%d.%03d,"
                "\"delta\":%d,\"stratum\":%d}",
            prefix,
            server->name,
            server->local.tv_sec,
-           server->local.tv_usec / 1000, delta, server->stratum);
+           server->local.tv_usec / 1000,
+           server->origin.tv_sec,
+           server->origin.tv_usec / 1000,
+           delta, server->stratum);
         strcat (JsonBuffer, buffer);
         prefix = ",";
     }
