@@ -395,7 +395,7 @@ static const char *hc_http_traffic (const char *method, const char *uri,
         if (sample->timestamp == 0) continue;
 
         snprintf (buffer, sizeof(buffer),
-           "%s{\"timestamp\":%d.%03d,"
+           "%s{\"timestamp\":%d,"
            "\"received\":%d,"
            "\"client\":%d,"
            "\"broadcast\":%d}",
