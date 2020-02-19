@@ -52,7 +52,7 @@ static hc_clock_status *clock_db = 0;
 static hc_nmea_status *nmea_db = 0;
 static hc_ntp_status *ntp_db = 0;
 
-static char JsonBuffer[8192];
+static char JsonBuffer[16384];
 
 static void hc_background (int fd, int mode) {
     if (kill (parent, 0) < 0) exit(0);
@@ -357,14 +357,11 @@ static const char *hc_http_ntp (const char *method, const char *uri,
                 + ((server->origin.tv_usec - server->local.tv_usec) / 1000);
         snprintf (buffer, sizeof(buffer),
            "%s{\"address\":\"%s\",\"timestamp\":%d.%03d,"
-               "\"remote\":%d.%03d,"
                "\"delta\":%d,\"stratum\":%d}",
            prefix,
            server->name,
            server->local.tv_sec,
            server->local.tv_usec / 1000,
-           server->origin.tv_sec,
-           server->origin.tv_usec / 1000,
            delta, server->stratum);
         strcat (JsonBuffer, buffer);
         prefix = ",";
