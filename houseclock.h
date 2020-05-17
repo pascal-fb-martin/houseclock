@@ -26,10 +26,7 @@
 #include <string.h>
 #include <sys/time.h>
 
-int hc_match (const char *reference,
-              const char *input, const char **value);
-
-int hc_present (const char *reference, const char *input);
+#include "echttp.h"
 
 int hc_test_mode (void);
 int hc_debug_enabled (void);

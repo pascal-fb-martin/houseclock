@@ -144,8 +144,8 @@ int hc_ntp_initialize (int argc, const char **argv) {
     const char *ntpperiod = "300";
 
     for (i = 1; i < argc; ++i) {
-        hc_match ("-ntp-service=", argv[i], &ntpservice);
-        hc_match ("-ntp-period=", argv[i], &ntpperiod);
+        echttp_option_match ("-ntp-service=", argv[i], &ntpservice);
+        echttp_option_match ("-ntp-period=", argv[i], &ntpperiod);
     }
     if (strcmp(ntpservice, "none") == 0) {
         return 0; // Do not act as a NTP server.

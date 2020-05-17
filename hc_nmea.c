@@ -199,12 +199,12 @@ int hc_nmea_initialize (int argc, const char **argv) {
     gpsUseBurst = 0;
 
     for (i = 1; i < argc; ++i) {
-        hc_match ("-gps=", argv[i], &gpsDevice);
-        hc_match ("-baud=", argv[i], &speed_option);
-        hc_match ("-latency=", argv[i], &latency_option);
-        if (hc_present ("-burst", argv[i])) gpsUseBurst = 1;
-        if (hc_present ("-privacy", argv[i])) gpsPrivacy = 1;
-        if (hc_present ("-show-nmea", argv[i])) gpsShowNmea = 1;
+        echttp_option_match ("-gps=", argv[i], &gpsDevice);
+        echttp_option_match ("-baud=", argv[i], &speed_option);
+        echttp_option_match ("-latency=", argv[i], &latency_option);
+        if (echttp_option_present ("-burst", argv[i])) gpsUseBurst = 1;
+        if (echttp_option_present ("-privacy", argv[i])) gpsPrivacy = 1;
+        if (echttp_option_present ("-show-nmea", argv[i])) gpsShowNmea = 1;
     }
     gpsLatency = atoi(latency_option);
     gpsSpeed = atoi(speed_option);

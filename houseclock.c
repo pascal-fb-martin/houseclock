@@ -22,18 +22,6 @@
  *
  * SYNOPSYS:
  *
- * int hc_match (const char *reference, const char *input, char **value)
- *
- *   Decode the value found in the input after the reference string, if
- *   the input matches the reference string. Otherwise just return 0.
- *
- *   This is used to retrieve values from command line arguments.
- *
- * int hc_present (const char *reference, const char *input)
- *
- *   Return true if the option matches the reference string. Used for
- *   boolean options.
- *
  * int hc_debug_enabled (void)
  *
  *   Return true if debug mode option (-debug) was enabled. Mostly used
@@ -59,21 +47,6 @@
 
 #include "hc_http.h"
 
-
-int hc_match (const char *reference,
-              const char *input, const char **value) {
-
-    size_t length = strlen(reference);
-
-    if (strncmp (reference, input, length)) return 0;
-
-    if (value) *value = input + length;
-    return 1;
-}
-
-int hc_present (const char *reference, const char *input) {
-    return strcmp (reference, input) == 0;
-}
 
 static int HcDebug = 0;
 static int HcTest = 0;
@@ -145,9 +118,9 @@ int main (int argc, const char **argv) {
         if (strcmp("-h", argv[i]) == 0) {
             hc_help(argv[0]);
         }
-        hc_match ("-db=", argv[i], &dbsizestr);
-        if (hc_present ("-debug", argv[i])) HcDebug = 1;
-        if (hc_present ("-test", argv[i])) HcTest = 1;
+        echttp_option_match ("-db=", argv[i], &dbsizestr);
+        if (echttp_option_present ("-debug", argv[i])) HcDebug = 1;
+        if (echttp_option_present ("-test", argv[i])) HcTest = 1;
     }
 
     // Start the web interface.

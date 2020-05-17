@@ -42,7 +42,6 @@
 #include "hc_ntp.h"
 #include "hc_http.h"
 
-#include "echttp.h"
 #include "echttp_static.h"
 
 static pid_t parent;

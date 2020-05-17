@@ -107,8 +107,8 @@ void hc_clock_initialize (int argc, const char **argv) {
     clockShowDrift = 0;
 
     for (i = 1; i < argc; ++i) {
-        hc_match ("-precision=", argv[i], &precision_option);
-        clockShowDrift |= hc_present ("-drift", argv[i]);
+        echttp_option_match ("-precision=", argv[i], &precision_option);
+        clockShowDrift |= echttp_option_present ("-drift", argv[i]);
     }
     precision = atoi(precision_option);
 
