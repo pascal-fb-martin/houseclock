@@ -412,12 +412,12 @@ void hc_http (int argc, const char **argv) {
     parent = getppid();
     if (echttp_open (argc, argv) <= 0) exit(1);
 
-    echttp_route_uri ("/status", hc_http_status);
-    echttp_route_uri ("/traffic", hc_http_traffic);
-    echttp_route_uri ("/clock/drift", hc_http_clockdrift);
-    echttp_route_uri ("/gps", hc_http_gps);
-    echttp_route_uri ("/ntp", hc_http_ntp);
-    echttp_static_route ("/ui", "/usr/local/lib/houseclock/public");
+    echttp_route_uri ("/ntp/status", hc_http_status);
+    echttp_route_uri ("/ntp/traffic", hc_http_traffic);
+    echttp_route_uri ("/ntp/drift", hc_http_clockdrift);
+    echttp_route_uri ("/ntp/gps", hc_http_gps);
+    echttp_route_uri ("/ntp/server", hc_http_ntp);
+    echttp_static_route ("/ntp/ui", "/usr/local/lib/houseclock/public");
     echttp_background (&hc_background);
     echttp_loop();
     exit (0);
