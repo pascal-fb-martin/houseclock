@@ -22,7 +22,7 @@ rebuild: clean all
 	gcc -c -g -O -o $@ $<
 
 houseclock: $(OBJS)
-	gcc -g -O -o houseclock $(OBJS) -lechttp -lrt
+	gcc -g -O -o houseclock $(OBJS) -lhouseportal -lechttp -lrt
 
 package:
 	mkdir -p packages

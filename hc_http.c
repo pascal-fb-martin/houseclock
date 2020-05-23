@@ -33,6 +33,7 @@
 #include <signal.h>
 #include <unistd.h>
 #include <errno.h>
+#include <time.h>
 
 #include "houseclock.h"
 #include "hc_db.h"
@@ -43,6 +44,7 @@
 #include "hc_http.h"
 
 #include "echttp_static.h"
+#include "houseportalclient.h"
 
 static pid_t parent;
 
@@ -51,10 +53,29 @@ static hc_clock_status *clock_db = 0;
 static hc_nmea_status *nmea_db = 0;
 static hc_ntp_status *ntp_db = 0;
 
+static int use_houseportal = 0;
+
 static char JsonBuffer[16384];
 
 static void hc_background (int fd, int mode) {
-    if (kill (parent, 0) < 0) exit(0);
+    static time_t LastCheck = 0;
+    static const char *path[] = {"/ntp"};
+
+    time_t now = time(0);
+
+    if (now < LastCheck) LastCheck = now - 2; // Always check when time changed
+
+    if (now > LastCheck + 2) {
+       if (use_houseportal) {
+          if (LastCheck == 0) {
+             houseportal_register (echttp_port(4), path, 1);
+          } else {
+             houseportal_renew();
+          }
+       }
+       if (kill (parent, 0) < 0) exit(0);
+       LastCheck = now;
+    }
 }
 
 static void *hc_http_attach (const char *name) {
@@ -409,7 +430,19 @@ const char *hc_http_help (int level) {
 }
 
 void hc_http (int argc, const char **argv) {
+
+    int i;
+    char *service;
+
     parent = getppid();
+
+    for (i = 1; i < argc; ++i) {
+        if (echttp_option_present ("-http-service=dynamic", argv[i])) {
+            houseportal_initialize (argc, argv);
+            use_houseportal = 1;
+            break;
+        }
+    }
     if (echttp_open (argc, argv) <= 0) exit(1);
 
     echttp_route_uri ("/ntp/status", hc_http_status);
