@@ -2,7 +2,7 @@
 
 # Overview
 
-This is a project to create a stratum 1 SNTP server based on a local GPS time source for home use. This project depends on [echttp](https://github.com/pascal-fb-martin/echttp) and [houseportal](https://github.com/pascal-fb-martin/houseportal).
+This is a project to create a stratum 1 SNTP server based on a local GPS time source for home use. This project depends on [echttp](https://github.com/pascal-fb-martin/echttp) and [HousePortal](https://github.com/pascal-fb-martin/houseportal).
 
 The main goal is to setup a local time server not dependent on an Internet link, that is easy to install, simple to configure and that can be monitored from a web browser. It automatically runs as a client when no GPS device is available.
 
@@ -46,6 +46,7 @@ All these default can be changed through command line options. For example, if t
 ```
 houseclock -http-service=8080 -gps=/dev/tty0
 ```
+If HousePortal has been installed, you can use the -http-service=dynamic command line option to use a dynamic port number and register a redirection with HousePortal. HouseClock does not currently sign its redirect message to HousePortal. The benefit of using HousePortal is that all your local http applications will share access through port 80, without having to manually assign port numbers. For example "http://machine/ntp/status" will be redirected to "http://machine:N/ntp/status" (where N is the current HouseClock HTTP port).
 
 For more information about available options, a complete help is available:
 ```
