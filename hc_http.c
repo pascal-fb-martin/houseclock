@@ -58,23 +58,30 @@ static int use_houseportal = 0;
 static char JsonBuffer[16384];
 
 static void hc_background (int fd, int mode) {
-    static time_t LastCheck = 0;
-    static const char *path[] = {"/ntp"};
+    static time_t LastParentCheck = 0;
+    static time_t LastRenewal = 0;
 
     time_t now = time(0);
 
-    if (now < LastCheck) LastCheck = now - 2; // Always check when time changed
+    if (now < LastParentCheck) {
+        LastParentCheck = 0; // Always check when time changed backward.
+        LastRenewal = 0;
+    }
 
-    if (now > LastCheck + 2) {
-       if (use_houseportal) {
-          if (LastCheck == 0) {
-             houseportal_register (echttp_port(4), path, 1);
-          } else {
-             houseportal_renew();
-          }
-       }
+    if (now >= LastParentCheck + 3) {
        if (kill (parent, 0) < 0) exit(0);
-       LastCheck = now;
+       LastParentCheck = now;
+    }
+
+    if (use_houseportal) {
+        static const char *path[] = {"/ntp"};
+        if (now >= LastRenewal + 60) {
+            if (LastRenewal > 0)
+                houseportal_renew();
+            else
+                houseportal_register (echttp_port(4), path, 1);
+            LastRenewal = now;
+        }
     }
 }
 
