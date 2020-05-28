@@ -51,3 +51,5 @@ uninstall:
 	if [ -e /etc/init.d/ntp ] ; then systemctl enable ntp ; systemctl start ntp ; fi
 	if [ -e /etc/init.d/chrony ] ; then systemctl enable chrony ; systemctl start chrony ; fi
 
+purge: uninstall
+
