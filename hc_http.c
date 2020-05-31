@@ -438,19 +438,15 @@ const char *hc_http_help (int level) {
 
 void hc_http (int argc, const char **argv) {
 
-    int i;
     char *service;
 
     parent = getppid();
 
-    for (i = 1; i < argc; ++i) {
-        if (echttp_option_present ("-http-service=dynamic", argv[i])) {
-            houseportal_initialize (argc, argv);
-            use_houseportal = 1;
-            break;
-        }
-    }
     if (echttp_open (argc, argv) <= 0) exit(1);
+    if (echttp_dynamic_port()) {
+        houseportal_initialize (argc, argv);
+        use_houseportal = 1;
+    }
 
     echttp_route_uri ("/ntp/status", hc_http_status);
     echttp_route_uri ("/ntp/traffic", hc_http_traffic);
