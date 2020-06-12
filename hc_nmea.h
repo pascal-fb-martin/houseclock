@@ -22,7 +22,8 @@
  */
 const char *hc_nmea_help (int level);
 
-int  hc_nmea_initialize (int argc, const char **argv);
+void hc_nmea_initialize (int argc, const char **argv);
+int  hc_nmea_listen (void);
 int  hc_nmea_process (const struct timeval *received);
 void hc_nmea_periodic (const struct timeval *now);
 int  hc_nmea_active (void);

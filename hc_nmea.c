@@ -60,7 +60,7 @@
  *      0: short help for one-line argument information.
  *      1: multi-line description of each argument.
  *
- * int hc_nmea_initialize (int argc, const char **argv)
+ * void hc_nmea_initialize (int argc, const char **argv)
  *
  *    Reset the NMEA decoder status, retrieve and store the NMEA options
  *    from the program's command line arguments.
@@ -78,6 +78,10 @@
  *    the options -drift and -latency=0, and then estimating the average
  *    drift, on a machine where the time is already synchronized using NTP.
  *    Default is 70 ms.
+ *
+ * int hc_nmea_listen (void);
+ *
+ *    Return the file descriptor to listen to, or else -1 (no device).
  *
  * int hc_nmea_process (const struct timeval *received)
  *
@@ -189,7 +193,7 @@ static void hc_nmea_reset (void) {
     gpsTty = -1;
 }
 
-int hc_nmea_initialize (int argc, const char **argv) {
+void hc_nmea_initialize (int argc, const char **argv) {
 
     int i;
     const char *latency_option = "70";
@@ -228,7 +232,6 @@ int hc_nmea_initialize (int argc, const char **argv) {
     }
 
     gpsInitialized = time(0);
-    return gpsTty;
 }
 
 
@@ -598,6 +601,10 @@ void hc_nmea_periodic (const struct timeval *now) {
             hc_nmea_reset();
         }
     }
+}
+
+int hc_nmea_listen (void) {
+    return gpsTty;
 }
 
 int hc_nmea_active (void) {

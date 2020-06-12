@@ -139,8 +139,7 @@ int main (int argc, const char **argv) {
 
     hc_clock_initialize (argc, argv);
 
-    gpstty = hc_nmea_initialize (argc, argv);
-    if (maxfd <= gpstty) maxfd = gpstty + 1;
+    hc_nmea_initialize (argc, argv);
 
     ntpsocket = hc_ntp_initialize (argc, argv);
     if (!HcTest) {
@@ -160,8 +159,10 @@ int main (int argc, const char **argv) {
             FD_SET(ntpsocket, &readset);
         }
 
+        gpstty = hc_nmea_listen();
         if (gpstty >= 0) {
             FD_SET(gpstty, &readset);
+            if (maxfd <= gpstty) maxfd = gpstty + 1;
         }
 
         gettimeofday(&now, NULL);
@@ -189,8 +190,7 @@ int main (int argc, const char **argv) {
                 hc_ntp_periodic (&now);
             }
             if (gpstty < 0) {
-                gpstty = hc_nmea_initialize (argc, argv);
-                if (maxfd <= gpstty) maxfd = gpstty + 1;
+                hc_nmea_initialize (argc, argv);
             } else {
                 hc_nmea_periodic (&now);
             }
