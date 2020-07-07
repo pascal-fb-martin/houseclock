@@ -1,12 +1,12 @@
 # HouseClock - A GPS Simple Network Time Server with Web console
 
-# Overview
+## Overview
 
 This is a project to create a stratum 1 SNTP server based on a local GPS time source for home use. This project depends on [echttp](https://github.com/pascal-fb-martin/echttp) and [HousePortal](https://github.com/pascal-fb-martin/houseportal).
 
 The main goal is to setup a local time server not dependent on an Internet link, that is easy to install, simple to configure and that can be monitored from a web browser. It automatically runs as a client when no GPS device is available.
 
-# What Makes HouseClock Special?
+## What Makes HouseClock Different?
 
 This time server does not depend on a PPS (Pulse Per Second) interface. It works with any GPS device that sends common NMEA sentences, including cheap USB GPS receivers. It is easy to configure through a few command line options, with the defaults working with most Linux configurations.
 
@@ -20,25 +20,28 @@ For slower speed USB receivers, this software detects the beginning of each GPS 
 
 Tests on a NTP-synchronized workstation with the VK-162 Usb GPS Navigation Module that can be bough for less than $15 show random variations that remain within a -10ms to 10ms range. The average delta with the synchronized time *slowly* changes between 40ms and 0ms: it could be an effect of fluctuation within the NTP synchronization itself (NTP pool on the Internet).
 
-# Server Mode
+## Server Mode
 
 This software runs as a stratum 1 time server if a GPS device is detected and a fix was obtained. When server, it answers to client requests and sends periodic NTP messages in local broadcast mode.
 
-# Client Mode
+## Client Mode
 
 When no GPS device is available, the software acts as a NTP broadcast client, listening to NTP broadcast messages. In this mode it will select a specific server as time source and stick to this server as long as it operates. If the current time source disappears, the client will switch to another available time source.
 
 In client mode, and while synchronized to a NTP broadcast server, the software acts as a NTP unicast server, stratum level set to the broadcast server's level plus one (i.e. stratum 2 is the broadcast server is stratum 1).
 
-# Installation
+## Installation
 
+* Install the OpenSSL development package(s).
+* Install [echttp](https://github.com/pascal-fb-martin/echttp).
+* Install [HousePortal](https://github.com/pascal-fb-martin/houseportal).
 * Clone this GitHub repository.
 * make
 * sudo make install
 
 This installs HouseClock as a service (for Debian's systemd) and starts it. If ntpd or chrony was installed, this stops and disables it.
 
-# Configuration
+## Configuration
 
 With default options, HouseClock will read from the GPS device at /dev/ttyACM0, listen for HTTP requests on the http tcp port (80) and handle NTP communication on the ntp udp port (123).
 
