@@ -453,7 +453,7 @@ void hc_http (int argc, const char **argv) {
     echttp_route_uri ("/ntp/drift", hc_http_clockdrift);
     echttp_route_uri ("/ntp/gps", hc_http_gps);
     echttp_route_uri ("/ntp/server", hc_http_ntp);
-    echttp_static_route ("/ntp/ui", "/usr/local/lib/houseclock/public");
+    echttp_static_route ("/ntp", "/usr/share/house/public/clock");
     echttp_background (&hc_background);
     echttp_loop();
     exit (0);
