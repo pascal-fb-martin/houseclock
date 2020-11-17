@@ -74,7 +74,7 @@ static void hc_background (int fd, int mode) {
     }
 
     if (use_houseportal) {
-        static const char *path[] = {"/ntp"};
+        static const char *path[] = {"clock:/ntp"};
         if (now >= LastRenewal + 60) {
             if (LastRenewal > 0)
                 houseportal_renew();
@@ -453,7 +453,7 @@ void hc_http (int argc, const char **argv) {
     echttp_route_uri ("/ntp/drift", hc_http_clockdrift);
     echttp_route_uri ("/ntp/gps", hc_http_gps);
     echttp_route_uri ("/ntp/server", hc_http_ntp);
-    echttp_static_route ("/ntp", "/usr/share/house/public/clock");
+    echttp_static_route ("/", "/usr/local/share/house/public");
     echttp_background (&hc_background);
     echttp_loop();
     exit (0);
