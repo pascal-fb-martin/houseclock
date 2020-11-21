@@ -43,6 +43,7 @@
 #include "hc_ntp.h"
 #include "hc_http.h"
 
+#include "echttp_cors.h"
 #include "echttp_static.h"
 #include "houseportalclient.h"
 
@@ -436,6 +437,10 @@ const char *hc_http_help (int level) {
     return echttp_help(level);
 }
 
+static void hc_protect (const char *method, const char *uri) {
+    echttp_cors_protect(method, uri);
+}
+
 void hc_http (int argc, const char **argv) {
 
     char *service;
@@ -447,6 +452,9 @@ void hc_http (int argc, const char **argv) {
         houseportal_initialize (argc, argv);
         use_houseportal = 1;
     }
+
+    echttp_cors_allow_method("GET");
+    echttp_protect (0, hc_protect);
 
     echttp_route_uri ("/ntp/status", hc_http_status);
     echttp_route_uri ("/ntp/traffic", hc_http_traffic);
