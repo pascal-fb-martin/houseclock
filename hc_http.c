@@ -447,6 +447,8 @@ void hc_http (int argc, const char **argv) {
 
     parent = getppid();
 
+    echttp_default ("-http-service=dynamic");
+
     if (echttp_open (argc, argv) <= 0) exit(1);
     if (echttp_dynamic_port()) {
         houseportal_initialize (argc, argv);
