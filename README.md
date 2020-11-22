@@ -14,7 +14,7 @@ Unless debug mode was explicitly enabled, this software does not produce any log
 
 Why not use gpsd and ntpd? These are designed for PPS, which is not supported by most (any?) USB GPS receivers. The installation instructions are quite long and arcane. Many people have done it, but the average person will find it technically demanding.
 
-PPS is not necessary: 1/10 second accuracy is more than enough for home use cases and most USB GPS receivers send the GPS fix within a few milliseconds anyway. On the flip side, the GPS receiver likely introduce a calculation latency. PPS is only needed with a slow GPS connection, and when really high accuracy is required, typically for scientific purpose..
+PPS is not necessary for most people: 1/10 second accuracy is more than enough for home use cases and most USB GPS receivers send the GPS fix within a few milliseconds anyway. On the flip side, the GPS receiver likely introduce a calculation latency, which might be variable. PPS is only needed with a slow GPS connection, and when really high accuracy is required, typically for scientific purpose..
 
 For slower speed USB receivers, this software detects the beginning of each GPS cycle, and calculates the timing of this cycle based on the receive time, the count of characters received and the transmission speed. GPS receivers tend to send the fix information in the first NMEA sentence, reducing the error estimate.
 
@@ -43,9 +43,9 @@ This installs HouseClock as a service (for Debian's systemd) and starts it. If n
 
 ## Configuration
 
-With default options, HouseClock will read from the GPS device at /dev/ttyACM0, listen for HTTP requests on the http tcp port (80) and handle NTP communication on the ntp udp port (123).
+With default options, HouseClock will read from the GPS device at /dev/ttyACM0, listen for HTTP requests on a dynamic tcp port number and handle NTP communication on the ntp udp port (123).
 
-All these default can be changed through command line options. For example, if the GPS device is different and the http port is already in use (httpd is running), one can force other values using the -http-service and -gps options:
+All these default can be changed through command line options. For example, if the GPS device is different, [HousePortal](https://github.com/pascal-fb-martin/houseportal) was not installed and the http port is already in use (httpd is running), one can force other values using the -http-service and -gps options:
 ```
 houseclock -http-service=8080 -gps=/dev/tty0
 ```
