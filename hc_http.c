@@ -56,6 +56,8 @@ static hc_ntp_status *ntp_db = 0;
 
 static int use_houseportal = 0;
 
+static char hc_hostname[256] = {0};
+
 static char JsonBuffer[16384];
 
 static void hc_background (int fd, int mode) {
@@ -184,11 +186,11 @@ static size_t hc_http_status_gps (char *cursor, int size, const char *prefix) {
     return strlen(cursor);
 }
 
-static size_t hc_http_status_clock (char *cursor, int size, const char *prefix) {
+static size_t hc_http_status_time (char *cursor, int size, const char *prefix) {
     if (! hc_http_attach_clock()) return 0;
 
     snprintf (cursor, size,
-              "%s\"clock\":{\"synchronized\":%s,\"reference\":%zd.%03d"
+              "%s\"time\":{\"synchronized\":%s,\"reference\":%zd.%03d"
               ",\"precision\":%d,\"drift\":%d,\"avgdrift\":%d"
               ",\"timestamp\":%zd.%03d}",
               prefix,
@@ -234,8 +236,19 @@ static const char *hc_http_status (const char *method, const char *uri,
                                    const char *data, int length) {
     char *cursor = JsonBuffer;
     int size = sizeof(JsonBuffer);
-    const char *prefix = "{";
+    const char *prefix = "";
     int added;
+
+    if (hc_hostname[0] == 0) {
+        gethostname (hc_hostname, sizeof(hc_hostname));
+    }
+    added = snprintf (cursor, size,
+                      "{\"host\":\"%s\",\"timestamp\":%ld,\"clock\":{",
+                      hc_hostname, (long)time(0));
+    if (added > 0) {
+        cursor += added;
+        size -= added;
+    }
 
     added = hc_http_status_gps(cursor, size, prefix);
     if (added > 0) {
@@ -244,7 +257,7 @@ static const char *hc_http_status (const char *method, const char *uri,
         prefix = ",";
     }
 
-    added = hc_http_status_clock(cursor, size, prefix);
+    added = hc_http_status_time(cursor, size, prefix);
     if (added > 0) {
         cursor += added;
         size -= added;
@@ -259,7 +272,7 @@ static const char *hc_http_status (const char *method, const char *uri,
     }
 
     snprintf (cursor, size,
-              "%s\"mem\":{\"space\":%d,\"used\":%d}}",
+              "%s\"mem\":{\"space\":%d,\"used\":%d}}}",
               prefix, hc_db_get_space(), hc_db_get_used());
 
     echttp_content_type_json();
