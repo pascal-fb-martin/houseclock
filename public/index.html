@@ -1,0 +1,106 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<html>
+<head>
+<link rel=stylesheet type="text/css" href="/house.css" title="House">
+<script>
+function clockUpdate (response) {
+    var hasdata = false;
+    if (response.clock.gps) {
+        hasdata = response.clock.gps.fix;
+    }
+    if (hasdata) {
+        document.getElementById('gpsdate').innerHTML = response.clock.gps.gpsdate;
+        document.getElementById('gpstime').innerHTML = response.clock.gps.gpstime;
+        document.getElementById('latitude').innerHTML = response.clock.gps.latitude;
+        document.getElementById('longitude').innerHTML = response.clock.gps.longitude;
+    } else {
+        document.getElementById('gpsdate').innerHTML = '(No Fix)';
+    }
+    if (response.clock.time) {
+        if (response.clock.time.synchronized) {
+            document.getElementById('precision').innerHTML = response.clock.time.precision+' ms';
+            document.getElementById('drift').innerHTML = response.clock.time.drift+' ms';
+            document.getElementById('avgdrift').innerHTML = response.clock.time.avgdrift+' ms';
+        } else {
+            document.getElementById('precision').innerHTML = 'Not Synchronized';
+        }
+    }
+    if (response.clock.ntp) {
+        document.getElementById('source').innerHTML = response.clock.ntp.source;
+        document.getElementById('stratum').innerHTML = response.clock.ntp.stratum;
+    }
+}
+
+function clockInfo () {
+
+    var command = new XMLHttpRequest();
+    command.open("GET", "/ntp/status");
+    command.onreadystatechange = function () {
+        if (command.readyState === 4 && command.status === 200) {
+            clockUpdate(JSON.parse(command.responseText));
+        }
+    }
+    command.send(null);
+}
+
+window.onload = function() {
+   clockInfo();
+   setInterval (clockInfo, 1000);
+}
+</script>
+<title></title>
+</head>
+<body>
+   <table class="housetopcontainer">
+   <tr><td>
+   <table class="housetop">
+   <tr>
+   <td><span>Clock</span></td>
+   </tr>
+   </table> 
+   </td></tr>
+   </table> 
+   <table class="housepanel">
+   <tr><td>
+   <div class="housepane">
+   <table class="housestatus">
+   <tr><td colspan="2"><span class="housetitle">GPS</span></td></tr>
+   <tr><td>Date:</td>
+   <td><span class="housedata" id="gpsdate"></span></td></tr>
+   <tr><td>Time:</td>
+   <td><span class="housedata" id="gpstime"></span></td></tr>
+   <tr><td>Latitude:</td>
+   <td><span class="housedata" id="latitude"></span></td></tr>
+   <tr><td>Longitude:</td>
+   <td><span class="housedata" id="longitude"></span></td></tr>
+   </table>
+   </div>
+   </td></tr>
+   <tr><td>
+   <div class="housepane">
+   <table class="housestatus">
+   <tr><td colspan="2"><span class="housetitle">Time</span></td></tr>
+   <tr><td>Precision:</td>
+   <td><span class="housedata" id="precision"></span></td></tr>
+   <tr><td>Drift:</td>
+   <td><span class="housedata" id="drift"></span></td></tr>
+   <tr><td>Average drift:</td>
+   <td><span class="housedata" id="avgdrift"></span></td></tr>
+   </table>
+   </div>
+   </td></tr>
+   <tr><td>
+   <div class="housepane">
+   <table class="housestatus">
+   <tr><td colspan="2"><span class="housetitle">NTP</span></td></tr>
+   <tr><td>Source:</td>
+   <td><span class="housedata" id="source"></span></td></tr>
+   <tr><td>Stratum:</td>
+   <td><span class="housedata" id="stratum"></span></td></tr>
+   </table>
+   </div>
+   </td></tr>
+   </table> 
+</body>
+</html>
+

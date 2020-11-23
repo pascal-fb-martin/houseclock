@@ -1,6 +1,8 @@
 
 OBJS= hc_db.o hc_http.o hc_clock.o hc_tty.o hc_nmea.o hc_broadcast.o hc_ntp.o houseclock.o
 
+SHARE=usr/local/share/house
+
 all: houseclock
 
 broadcast: hc_broadcast.o
@@ -36,6 +38,10 @@ install:
 	cp init.debian /etc/init.d/houseclock
 	chown root:root /usr/local/bin/houseclock /etc/init.d/houseclock
 	chmod 755 /usr/local/bin/houseclock /etc/init.d/houseclock
+	mkdir -p $(SHARE)/public/ntp
+	cp public/* $(SHARE)/public/ntp
+	chmod 644 $(SHARE)/public/ntp/*
+	chmod 755 $(SHARE) $(SHARE)/public $(SHARE)/public/ntp
 	if [ -e /etc/init.d/ntp ] ; then systemctl stop ntp ; systemctl disable ntp ; fi
 	if [ -e /etc/init.d/chrony ] ; then systemctl stop chrony ; systemctl disable chrony ; fi
 	systemctl daemon-reload
