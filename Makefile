@@ -1,7 +1,7 @@
 
 OBJS= hc_db.o hc_http.o hc_clock.o hc_tty.o hc_nmea.o hc_broadcast.o hc_ntp.o houseclock.o
 
-SHARE=usr/local/share/house
+SHARE=/usr/local/share/house
 
 all: houseclock
 
