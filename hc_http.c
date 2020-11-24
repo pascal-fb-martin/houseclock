@@ -243,8 +243,8 @@ static const char *hc_http_status (const char *method, const char *uri,
         gethostname (hc_hostname, sizeof(hc_hostname));
     }
     added = snprintf (cursor, size,
-                      "{\"host\":\"%s\",\"timestamp\":%ld,\"clock\":{",
-                      hc_hostname, (long)time(0));
+                      "{\"host\":\"%s\",\"proxy\":\"%s\",\"timestamp\":%ld,\"clock\":{",
+                      hc_hostname, houseportal_server(), (long)time(0));
     if (added > 0) {
         cursor += added;
         size -= added;

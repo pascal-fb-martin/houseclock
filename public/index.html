@@ -4,6 +4,9 @@
 <link rel=stylesheet type="text/css" href="/house.css" title="House">
 <script>
 function clockUpdate (response) {
+
+    document.getElementById('portal').href = 'http://'+response.proxy+'/index.html';
+
     var hasdata = false;
     if (response.clock.gps) {
         hasdata = response.clock.gps.fix;
@@ -55,6 +58,7 @@ window.onload = function() {
    <tr><td>
    <table class="housetop">
    <tr>
+   <td><a id="portal" href="/index.html">Portal</a></td>
    <td><span>Clock</span></td>
    </tr>
    </table> 
