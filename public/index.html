@@ -3,6 +3,10 @@
 <head>
 <link rel=stylesheet type="text/css" href="/house.css" title="House">
 <script>
+function shortTime (time) {
+    return time.toLocaleString().split(' GMT')[0];
+}
+
 function clockUpdate (response) {
 
     document.getElementById('portal').href = 'http://'+response.proxy+'/index.html';
@@ -24,6 +28,8 @@ function clockUpdate (response) {
             document.getElementById('precision').innerHTML = response.clock.time.precision+' ms';
             document.getElementById('drift').innerHTML = response.clock.time.drift+' ms';
             document.getElementById('avgdrift').innerHTML = response.clock.time.avgdrift+' ms';
+            var cycle = new Date(Math.round(response.clock.time.timestamp * 1000));
+            document.getElementById('cycle').innerHTML = shortTime(cycle);
         } else {
             document.getElementById('precision').innerHTML = 'Not Synchronized';
         }
@@ -32,6 +38,8 @@ function clockUpdate (response) {
         document.getElementById('source').innerHTML = response.clock.ntp.source;
         document.getElementById('stratum').innerHTML = response.clock.ntp.stratum;
     }
+    var sysdate = new Date (response.timestamp * 1000);
+    document.getElementById('systime').innerHTML = shortTime(sysdate);
 }
 
 function clockInfo () {
@@ -84,12 +92,16 @@ window.onload = function() {
    <div class="housepane">
    <table class="housestatus">
    <tr><td colspan="2"><span class="housetitle">Time</span></td></tr>
-   <tr><td>Precision:</td>
+   <tr><td>Precision Goal:</td>
    <td><span class="housedata" id="precision"></span></td></tr>
    <tr><td>Drift:</td>
    <td><span class="housedata" id="drift"></span></td></tr>
    <tr><td>Average drift:</td>
    <td><span class="housedata" id="avgdrift"></span></td></tr>
+   <tr><td>Capture Cycle:</td>
+   <td><span class="housedata" id="cycle"></span></td></tr>
+   <tr><td>Current Time:</td>
+   <td><span class="housedata" id="systime"></span></td></tr>
    </table>
    </div>
    </td></tr>
