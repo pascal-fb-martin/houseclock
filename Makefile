@@ -24,7 +24,7 @@ rebuild: clean all
 	gcc -c -g -O -o $@ $<
 
 houseclock: $(OBJS)
-	gcc -g -O -o houseclock $(OBJS) -lhouseportal -lechttp -lcrypto -lrt
+	gcc -g -O -o houseclock $(OBJS) -lhouseportal -lechttp -lssl -lcrypto -lrt
 
 package:
 	mkdir -p packages
