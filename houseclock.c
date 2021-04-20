@@ -131,7 +131,8 @@ int main (int argc, const char **argv) {
         hc_http (argc, argv);
     }
     if (httpid < 0) {
-        fprintf (stderr, "Cannot fork: %s\n", strerror (errno));
+        fprintf (stderr, "[%s %d] Cannot fork: %s\n",
+                 __FILE__, __LINE__, strerror (errno));
         exit (1);
     }
 
@@ -198,6 +199,8 @@ int main (int argc, const char **argv) {
 
             int wstatus;
             if (waitpid (httpid, &wstatus, WNOHANG) == httpid) {
+                fprintf (stderr, "[%s %d] the HTTP server died, exit now\n",
+                         __FILE__, __LINE__);
                 exit(1);
             }
         }

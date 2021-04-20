@@ -155,7 +155,8 @@ int hc_ntp_initialize (int argc, const char **argv) {
 
     i = hc_db_new (HC_NTP_STATUS, sizeof(hc_ntp_status), 1);
     if (i != 0) {
-        fprintf (stderr, "cannot create %s: %s\n", HC_NTP_STATUS, strerror(i));
+        fprintf (stderr, "[%s %d] cannot create %s: %s\n",
+                 __FILE__, __LINE__, HC_NTP_STATUS, strerror(i));
         exit (1);
     }
     hc_ntp_status_db = (hc_ntp_status *) hc_db_get (HC_NTP_STATUS);

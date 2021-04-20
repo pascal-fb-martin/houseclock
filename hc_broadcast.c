@@ -105,8 +105,8 @@ static int hc_broadcast_socket (int ipv4, int port) {
 
     s = socket(PF_INET, SOCK_DGRAM, IPPROTO_UDP);
     if (s < 0) {
-       fprintf (stderr, "cannot open socket for port %d: %s\n",
-                port, strerror(errno));
+       fprintf (stderr, "[%s %d] cannot open socket for port %d: %s\n",
+                __FILE__, __LINE__, port, strerror(errno));
        exit (1);
     }
 
@@ -115,8 +115,8 @@ static int hc_broadcast_socket (int ipv4, int port) {
 
     value = 1;
     if (setsockopt(s, SOL_SOCKET, SO_BROADCAST, &value, sizeof(value)) < 0) {
-       fprintf (stderr, "cannot enable broadcast for port %d: %s\n",
-                port, strerror(errno));
+       fprintf (stderr, "[%s %d] cannot enable broadcast for port %d: %s\n",
+                __FILE__, __LINE__, port, strerror(errno));
        exit (1);
     }
 
@@ -127,7 +127,8 @@ static int hc_broadcast_socket (int ipv4, int port) {
 
     if (bind(s, (struct sockaddr *)&netaddress, sizeof(netaddress)) < 0) {
        fprintf (stderr,
-                "cannot bind to %s: %s\n",
+                "[%s %d] cannot bind to %s: %s\n",
+                __FILE__, __LINE__,
                 hc_broadcast_format(&netaddress), strerror(errno));
        exit (1);
     }
@@ -206,7 +207,8 @@ int hc_broadcast_open (const char *service) {
     endservent();
 
     if (serverport <= 0) {
-        fprintf (stderr, "invalid service name %s\n", service);
+        fprintf (stderr, "[%s %d] invalid service name %s\n",
+                 __FILE__, __LINE__, service);
         exit (1);
     }
 
@@ -217,15 +219,15 @@ int hc_broadcast_open (const char *service) {
     value = 1024 * 1024;
     if (setsockopt(udpserver,
                    SOL_SOCKET, SO_RCVBUF, &value, sizeof(value)) < 0) {
-       fprintf (stderr, "cannot set receive buffer to %d for service %s: %s\n",
-                value, service, strerror(errno));
+       fprintf (stderr, "[%s %d] cannot set receive buffer to %d for service %s: %s\n",
+                __FILE__, __LINE__, value, service, strerror(errno));
        exit (1);
     }
     value = 1024 * 1024;
     if (setsockopt(udpserver,
                    SOL_SOCKET, SO_SNDBUF, &value, sizeof(value)) < 0) {
-       fprintf (stderr, "cannot set send buffer to %d for service %s: %s\n",
-                value, service, strerror(errno));
+       fprintf (stderr, "[%s %d] cannot set send buffer to %d for service %s: %s\n",
+                __FILE__, __LINE__, value, service, strerror(errno));
        exit (1);
     }
 

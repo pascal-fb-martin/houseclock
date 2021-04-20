@@ -72,7 +72,11 @@ static void hc_background (int fd, int mode) {
     }
 
     if (now >= LastParentCheck + 3) {
-       if (kill (parent, 0) < 0) exit(0);
+       if (kill (parent, 0) < 0) {
+           fprintf (stderr, "[%s %d] Parent disappeared, exit now\n",
+                    __FILE__, __LINE__);
+           exit(1);
+       }
        LastParentCheck = now;
     }
 
@@ -104,8 +108,8 @@ static int hc_http_attach_clock (void) {
         if (clock_db == 0) return 0;
         if (hc_db_get_count (HC_CLOCK_STATUS) != 1
             || hc_db_get_size (HC_CLOCK_STATUS) != sizeof(hc_clock_status)) {
-            fprintf (stderr, "wrong data structure for table %s\n",
-                     HC_CLOCK_STATUS);
+            fprintf (stderr, "[%s %d] wrong data structure for table %s\n",
+                     __FILE__, __LINE__, HC_CLOCK_STATUS);
             exit (1);
         }
     }
@@ -119,8 +123,8 @@ static int hc_http_attach_nmea (void) {
         if (nmea_db == 0) return 0;
         if (hc_db_get_count (HC_NMEA_STATUS) != 1
             || hc_db_get_size (HC_NMEA_STATUS) != sizeof(hc_nmea_status)) {
-            fprintf (stderr, "wrong data structure for table %s\n",
-                     HC_NMEA_STATUS);
+            fprintf (stderr, "[%s %d] wrong data structure for table %s\n",
+                     __FILE__, __LINE__, HC_NMEA_STATUS);
             exit (1);
         }
     }
@@ -134,8 +138,8 @@ static int hc_http_attach_ntp (void) {
         if (ntp_db == 0) return 0;
         if (hc_db_get_count (HC_NTP_STATUS) != 1
             || hc_db_get_size (HC_NTP_STATUS) != sizeof(hc_ntp_status)) {
-            fprintf (stderr, "wrong data structure for table %s\n",
-                     HC_NTP_STATUS);
+            fprintf (stderr, "[%s %d] wrong data structure for table %s\n",
+                     __FILE__, __LINE__, HC_NTP_STATUS);
             exit (1);
         }
     }
@@ -332,8 +336,8 @@ static const char *hc_http_clockdrift (const char *method, const char *uri,
         if (drift_db == 0) return "";
         drift_count = hc_db_get_count (HC_CLOCK_DRIFT);
         if (hc_db_get_size (HC_CLOCK_DRIFT) != sizeof(int)) {
-            fprintf (stderr, "wrong data structure for table %s\n",
-                     HC_CLOCK_DRIFT);
+            fprintf (stderr, "[%s %d] wrong data structure for table %s\n",
+                     __FILE__, __LINE__, HC_CLOCK_DRIFT);
             exit (1);
         }
     }
@@ -462,7 +466,10 @@ void hc_http (int argc, const char **argv) {
 
     echttp_default ("-http-service=dynamic");
 
-    if (echttp_open (argc, argv) <= 0) exit(1);
+    if (echttp_open (argc, argv) <= 0) {
+        fprintf (stderr, "[%s %d] echttp_open() failed\n", __FILE__, __LINE__);
+        exit(1);
+    }
     if (echttp_dynamic_port()) {
         houseportal_initialize (argc, argv);
         use_houseportal = 1;

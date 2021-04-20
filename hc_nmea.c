@@ -217,7 +217,8 @@ void hc_nmea_initialize (int argc, const char **argv) {
         i = hc_db_new (HC_NMEA_STATUS, sizeof(hc_nmea_status), 1);
         if (i != 0) {
             fprintf (stderr,
-                     "cannot create %s: %s\n", HC_NMEA_STATUS, strerror(i));
+                     "[%s %d] cannot create %s: %s\n",
+                     __FILE__, __LINE__, HC_NMEA_STATUS, strerror(i));
             exit(1);
         }
         hc_nmea_status_db = (hc_nmea_status *) hc_db_get (HC_NMEA_STATUS);

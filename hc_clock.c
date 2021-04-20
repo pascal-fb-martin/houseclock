@@ -114,7 +114,8 @@ void hc_clock_initialize (int argc, const char **argv) {
 
     i = hc_db_new (HC_CLOCK_DRIFT, sizeof(int), HC_CLOCK_DRIFT_DEPTH);
     if (i != 0) {
-        fprintf (stderr, "cannot create %s: %s\n", HC_CLOCK_DRIFT, strerror(i));
+        fprintf (stderr, "[%s %d] cannot create %s: %s\n",
+                 __FILE__, __LINE__, HC_CLOCK_DRIFT, strerror(i));
         exit (1);
     }
     hc_clock_drift_db = (int *) hc_db_get (HC_CLOCK_DRIFT);
@@ -122,8 +123,8 @@ void hc_clock_initialize (int argc, const char **argv) {
 
     i = hc_db_new (HC_CLOCK_STATUS, sizeof(hc_clock_status), 1);
     if (i != 0) {
-        fprintf (stderr,
-                 "cannot create %s: %s\n", HC_CLOCK_STATUS, strerror(i));
+        fprintf (stderr, "[%s %d] cannot create %s: %s\n",
+                 __FILE__, __LINE__, HC_CLOCK_STATUS, strerror(i));
         exit (1);
     }
     hc_clock_status_db = (hc_clock_status *)hc_db_get (HC_CLOCK_STATUS);
