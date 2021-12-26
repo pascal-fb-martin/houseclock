@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html>
+<head>
+<link rel=stylesheet type="text/css" href="/house.css" title="House">
+<script>
+function ntpShowStatus (response) {
+    document.getElementById('portal').href = 'http://'+response.proxy+'/index.html';
+}
+
+function ntpStatus () {
+    var command = new XMLHttpRequest();
+    command.open("GET", "/ntp/status");
+    command.onreadystatechange = function () {
+        if (command.readyState === 4 && command.status === 200) {
+            ntpShowStatus (JSON.parse(command.responseText));
+        }
+    }
+    command.send(null);
+}
+window.onload = function() {
+
+   function newColumn (text) {
+      var column = document.createElement("td");
+      column.innerHTML = text;
+      return column;
+   }
+
+   var lastEventId = null;
+
+   function showEvents (response) {
+
+      if (!lastEventId) {
+          var title = response.host + ' - Kasa Devices';
+          document.getElementsByTagName ('title')[0].innerHTML = title;
+          var elements = document.getElementsByClassName ('hostname');
+          for (var i = 0; i < elements.length; i++) {
+              elements[i].innerHTML = response.host;
+          }
+      }
+
+      lastEventId = response.ntp.latest;
+
+      var table = document.getElementsByClassName ('eventlist')[0];
+      for (var i = table.childNodes.length - 1; i > 1; i--) {
+         table.removeChild(table.childNodes[i]);
+      }
+      for (var i = response.ntp.events.length-1; i >= 0; --i) {
+         var event = response.ntp.events[i];
+         var timestamp = new Date(event[0]);
+         var row = document.createElement("tr");
+         row.appendChild(newColumn(timestamp.toLocaleString()));
+         row.appendChild(newColumn(event[1]));
+         row.appendChild(newColumn(event[2]));
+         row.appendChild(newColumn(event[3]));
+         row.appendChild(newColumn(event[4]));
+         table.appendChild(row);
+      }
+   }
+
+   function updateEvents() {
+
+      var command = new XMLHttpRequest();
+      command.open("GET", "/ntp/log/events");
+      command.onreadystatechange = function () {
+         if (command.readyState === 4 && command.status === 200) {
+            showEvents (JSON.parse(command.responseText));
+         }
+      }
+      command.send(null);
+   }
+
+   function checkEvents () {
+
+      var command = new XMLHttpRequest();
+      command.open("GET", "/ntp/log/latest");
+      command.onreadystatechange = function () {
+          if (command.readyState === 4 && command.status === 200) {
+              var response = JSON.parse(command.responseText);
+              if ((lastEventId == null) ||
+                  (response.ntp.latest != lastEventId)) updateEvents ();
+          }
+      }
+      command.send(null);
+   }
+
+   updateEvents();
+   setInterval (function() {checkEvents()}, 1000);
+   ntpStatus();
+}
+</script>
+<head>
+   <title></title>
+</head>
+<body>
+   <table class="housetopcontainer">
+   <tr><td>
+   <table class="housetop">
+   <tr>
+   <td><a id="portal" href="/index.html">Portal</a></td>
+   <td><a href="/ntp/index.html">Clock</a></td>
+   <td><span>Events</span></td>
+   </tr>
+   </table>
+   </td></tr>
+   </table>
+   <h1><span class="hostname"></span></h1>
+   <table class="housewidetable eventlist" border="0">
+      <tr>
+         <th width="15%">Time</th>
+         <th width="10%">Category</th>
+         <th width="15%">Name</th>
+         <th width="15%">Action</th>
+         <th width="45%">Description</th>
+      </tr>
+   </table>
+</body>
+</html>
+

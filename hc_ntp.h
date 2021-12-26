@@ -44,6 +44,7 @@ struct hc_ntp_client {
     struct sockaddr_in address;
     struct timeval origin;
     struct timeval local;
+    int logged;
 };
 
 struct hc_ntp_server {
@@ -52,6 +53,7 @@ struct hc_ntp_server {
     short  stratum;
     struct sockaddr_in address;
     char   name[48];
+    int logged;
 };
 
 typedef struct {

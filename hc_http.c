@@ -46,9 +46,12 @@
 #include "echttp_cors.h"
 #include "echttp_static.h"
 #include "houseportalclient.h"
+#include "houselog.h"
 
 static pid_t parent;
 
+static long hc_known_clients[256]; // Enough to store IP v4 address.
+static long hc_known_servers[256]; // Enough to store IP v4 address.
 
 static hc_clock_status *clock_db = 0;
 static hc_nmea_status *nmea_db = 0;
@@ -63,6 +66,7 @@ static char JsonBuffer[16384];
 static void hc_background (int fd, int mode) {
     static time_t LastParentCheck = 0;
     static time_t LastRenewal = 0;
+    static time_t LastActivityCheck = 0;
 
     time_t now = time(0);
 
@@ -89,6 +93,89 @@ static void hc_background (int fd, int mode) {
                 houseportal_register (echttp_port(4), path, 1);
             LastRenewal = now;
         }
+    }
+
+    if (ntp_db && (now >= LastActivityCheck + 5)) {
+
+
+        // Generate events for new or unsynchronized clients.
+        // We generate a local "cache" of known clients to limit the number of
+        // events generated when the clent is not synchronized. The cache key
+        // is the low 7 bits of the IP address, plus the ninth bit: this works
+        // best for me because I have two subnets, while I don't have anywhere
+        // close to 127 machines at home.
+        // This should work fine for most home networks.
+        //
+        int i;
+        for (i = 0; i < HC_NTP_DEPTH; ++i) {
+            struct hc_ntp_client *client = ntp_db->clients + i;
+
+            // Do not consider events that are empty or too old (risk of
+            // race condition)
+            //
+            if ((client->local.tv_sec < LastActivityCheck)
+                    || (client->local.tv_sec == 0)) continue;
+
+            // Do not consider events that were already detected.
+            //
+            if (client->logged) continue;
+ 
+            if (abs(client->origin.tv_sec - client->local.tv_sec) > 600) {
+                houselog_event ("CLIENT", hc_broadcast_format (&(client->address)),
+                                "ACTIVE", "NOT SYNCHRONIZED");
+            } else {
+                long adr = ntohl(client->address.sin_addr.s_addr);
+                int  hash = (int) ((adr & 0x7f) | ((adr & 0x100) >> 1));
+
+                int delta =
+                    ((client->origin.tv_sec - client->local.tv_sec) * 1000)
+                    + ((client->origin.tv_usec - client->local.tv_usec) / 1000);
+
+                if ((hc_known_clients[hash] == adr) && (abs(delta) < 10000)) continue;
+                houselog_event ("CLIENT", hc_broadcast_format (&(client->address)),
+                                "ACTIVE", "DELTA %d MS", delta);
+
+                hc_known_clients[hash] = adr;
+            }
+            client->logged = 1;
+        }
+
+        // Generate events for newly detected servers, using a similar cache
+        // as for clients to limit the rate of events when synchronized.
+        //
+        for (i = 0; i < HC_NTP_POOL; ++i) {
+            struct hc_ntp_server *server = ntp_db->pool + i;
+
+            // Do not consider events that are empty or too old (risk of
+            // race condition)
+            //
+            if ((server->local.tv_sec < LastActivityCheck)
+                    || (server->local.tv_sec == 0)) continue;
+
+            // Do not consider events that were already detected.
+            //
+            if (server->logged) continue;
+ 
+            if (abs(server->origin.tv_sec - server->local.tv_sec) > 600) {
+                houselog_event ("SERVER", server->name, "ACTIVE",
+                                "STRATUM %d, NOT SYNCHRONIZED", server->stratum);
+            } else {
+                long adr = ntohl(server->address.sin_addr.s_addr);
+                int  hash = (int) ((adr & 0x7f) | ((adr & 0x100) >> 1));
+
+                int delta =
+                    ((server->origin.tv_sec - server->local.tv_sec) * 1000)
+                    + ((server->origin.tv_usec - server->local.tv_usec) / 1000);
+
+                if ((hc_known_servers[hash] == adr) && (abs(delta) < 10000)) continue;
+                houselog_event ("SERVER", server->name, "ACTIVE",
+                                "STRATUM %d, DELTA %d MS", server->stratum, delta);
+
+                hc_known_servers[hash] = adr;
+            }
+            server->logged = 1;
+        }
+        LastActivityCheck = now;
     }
 }
 
@@ -474,6 +561,7 @@ void hc_http (int argc, const char **argv) {
         houseportal_initialize (argc, argv);
         use_houseportal = 1;
     }
+    houselog_initialize ("ntp", argc, argv);
 
     echttp_cors_allow_method("GET");
     echttp_protect (0, hc_protect);
@@ -485,6 +573,7 @@ void hc_http (int argc, const char **argv) {
     echttp_route_uri ("/ntp/server", hc_http_ntp);
     echttp_static_route ("/", "/usr/local/share/house/public");
     echttp_background (&hc_background);
+    houselog_event ("SERVICE", "ntp", "STARTED", "ON %s", houselog_host());
     echttp_loop();
     exit (0);
 }

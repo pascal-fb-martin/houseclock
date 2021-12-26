@@ -305,6 +305,7 @@ static void hc_ntp_broadcastmsg (const ntpHeaderV3 *head,
     hc_ntp_status_db->pool[sender].stratum = head->stratum;
     hc_ntp_get_timestamp
          (&(hc_ntp_status_db->pool[sender].origin), &(head->transmit));
+    hc_ntp_status_db->pool[sender].logged = 0;
 
     // Elect a time source. Choose the lowest stratum available.
     //
@@ -413,6 +414,7 @@ static void hc_ntp_requestmsg (const ntpHeaderV3 *head,
         (&(hc_ntp_status_db->clients[hc_ntp_client_cursor].origin),
          &(ntpResponse.origin));
     hc_ntp_status_db->clients[hc_ntp_client_cursor].local = *receive;
+    hc_ntp_status_db->clients[hc_ntp_client_cursor].logged = 0;
 }
 
 
