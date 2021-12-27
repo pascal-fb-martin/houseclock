@@ -56,6 +56,8 @@ static long hc_known_servers[256]; // Enough to store IP v4 address.
 static hc_clock_status *clock_db = 0;
 static hc_nmea_status *nmea_db = 0;
 static hc_ntp_status *ntp_db = 0;
+static int *drift_db = 0;
+static int drift_count;
 
 static int use_houseportal = 0;
 
@@ -63,10 +65,82 @@ static char hc_hostname[256] = {0};
 
 static char JsonBuffer[16384];
 
+static void *hc_http_attach (const char *name) {
+    void *p = hc_db_get (name);
+    if (p == 0) {
+        fprintf (stderr, "Cannot attach to %s\n", name);
+        echttp_error (503, "Service Temporarily Unavailable");
+    }
+    return p;
+}
+
+static int hc_http_attach_clock (void) {
+
+    if (clock_db == 0) {
+        clock_db = (hc_clock_status *) hc_http_attach (HC_CLOCK_STATUS);
+        if (clock_db == 0) return 0;
+        if (hc_db_get_count (HC_CLOCK_STATUS) != 1
+            || hc_db_get_size (HC_CLOCK_STATUS) != sizeof(hc_clock_status)) {
+            fprintf (stderr, "[%s %d] wrong data structure for table %s\n",
+                     __FILE__, __LINE__, HC_CLOCK_STATUS);
+            exit (1);
+        }
+    }
+    return 1;
+}
+
+static int hc_http_attach_drift (void) {
+
+    if (drift_db == 0) {
+        drift_db = (int *) hc_http_attach (HC_CLOCK_DRIFT);
+        if (drift_db == 0) return 0;
+        drift_count = hc_db_get_count (HC_CLOCK_DRIFT);
+        if (hc_db_get_size (HC_CLOCK_DRIFT) != sizeof(int)) {
+            fprintf (stderr, "[%s %d] wrong data structure for table %s\n",
+                     __FILE__, __LINE__, HC_CLOCK_DRIFT);
+            exit (1);
+        }
+    }
+    return 1;
+}
+
+static int hc_http_attach_nmea (void) {
+
+    if (nmea_db == 0) {
+        nmea_db = (hc_nmea_status *) hc_http_attach (HC_NMEA_STATUS);
+        if (nmea_db == 0) return 0;
+        if (hc_db_get_count (HC_NMEA_STATUS) != 1
+            || hc_db_get_size (HC_NMEA_STATUS) != sizeof(hc_nmea_status)) {
+            fprintf (stderr, "[%s %d] wrong data structure for table %s\n",
+                     __FILE__, __LINE__, HC_NMEA_STATUS);
+            exit (1);
+        }
+    }
+    return 1;
+}
+
+static int hc_http_attach_ntp (void) {
+
+    if (ntp_db == 0) {
+        ntp_db = (hc_ntp_status *) hc_http_attach (HC_NTP_STATUS);
+        if (ntp_db == 0) return 0;
+        if (hc_db_get_count (HC_NTP_STATUS) != 1
+            || hc_db_get_size (HC_NTP_STATUS) != sizeof(hc_ntp_status)) {
+            fprintf (stderr, "[%s %d] wrong data structure for table %s\n",
+                     __FILE__, __LINE__, HC_NTP_STATUS);
+            exit (1);
+        }
+    }
+    return 1;
+}
+
+
 static void hc_background (int fd, int mode) {
+
     static time_t LastParentCheck = 0;
     static time_t LastRenewal = 0;
     static time_t LastActivityCheck = 0;
+    static time_t LastDriftCheck = 0;
 
     time_t now = time(0);
 
@@ -95,8 +169,7 @@ static void hc_background (int fd, int mode) {
         }
     }
 
-    if (ntp_db && (now >= LastActivityCheck + 5)) {
-
+    if (hc_http_attach_ntp() && (now >= LastActivityCheck + 5)) {
 
         // Generate events for new or unsynchronized clients.
         // We generate a local "cache" of known clients to limit the number of
@@ -177,62 +250,30 @@ static void hc_background (int fd, int mode) {
         }
         LastActivityCheck = now;
     }
-}
 
-static void *hc_http_attach (const char *name) {
-    void *p = hc_db_get (name);
-    if (p == 0) {
-        fprintf (stderr, "Cannot attach to %s\n", name);
-        echttp_error (503, "Service Temporarily Unavailable");
-    }
-    return p;
-}
+    if (hc_http_attach_drift() && (now >= LastDriftCheck + drift_count)) {
+        int i;
+        int max = 0;
+        static int MaxDriftLogged = 0;
 
-static int hc_http_attach_clock (void) {
-
-    if (clock_db == 0) {
-        clock_db = (hc_clock_status *) hc_http_attach (HC_CLOCK_STATUS);
-        if (clock_db == 0) return 0;
-        if (hc_db_get_count (HC_CLOCK_STATUS) != 1
-            || hc_db_get_size (HC_CLOCK_STATUS) != sizeof(hc_clock_status)) {
-            fprintf (stderr, "[%s %d] wrong data structure for table %s\n",
-                     __FILE__, __LINE__, HC_CLOCK_STATUS);
-            exit (1);
+        // Only record the "significant" drift events, or else too many
+        // events would be generated.
+        //
+        for (i = 0; i < drift_count; ++i) {
+            if (abs(max) < abs(drift_db[i])) max = drift_db[i];
         }
-    }
-    return 1;
-}
-
-static int hc_http_attach_nmea (void) {
-
-    if (nmea_db == 0) {
-        nmea_db = (hc_nmea_status *) hc_http_attach (HC_NMEA_STATUS);
-        if (nmea_db == 0) return 0;
-        if (hc_db_get_count (HC_NMEA_STATUS) != 1
-            || hc_db_get_size (HC_NMEA_STATUS) != sizeof(hc_nmea_status)) {
-            fprintf (stderr, "[%s %d] wrong data structure for table %s\n",
-                     __FILE__, __LINE__, HC_NMEA_STATUS);
-            exit (1);
+        if (max >= 10000) {
+            if (abs(max) > MaxDriftLogged) {
+                houselog_event
+                    ("CLOCK", houselog_host(), "DRIFT", "BY %d MS", max);
+                MaxDriftLogged = abs(max);
+            }
+        } else {
+            MaxDriftLogged = 0; // That drift was repaired.
         }
+        LastDriftCheck = now;
     }
-    return 1;
 }
-
-static int hc_http_attach_ntp (void) {
-
-    if (ntp_db == 0) {
-        ntp_db = (hc_ntp_status *) hc_http_attach (HC_NTP_STATUS);
-        if (ntp_db == 0) return 0;
-        if (hc_db_get_count (HC_NTP_STATUS) != 1
-            || hc_db_get_size (HC_NTP_STATUS) != sizeof(hc_ntp_status)) {
-            fprintf (stderr, "[%s %d] wrong data structure for table %s\n",
-                     __FILE__, __LINE__, HC_NTP_STATUS);
-            exit (1);
-        }
-    }
-    return 1;
-}
-
 
 static size_t hc_http_status_gps (char *cursor, int size, const char *prefix) {
 
@@ -415,19 +456,8 @@ static const char *hc_http_gps (const char *method, const char *uri,
 
 static const char *hc_http_clockdrift (const char *method, const char *uri,
                                        const char *data, int length) {
-    static int *drift_db = 0;
-    static int drift_count;
 
-    if (drift_db == 0) {
-        drift_db = (int *) hc_http_attach (HC_CLOCK_DRIFT);
-        if (drift_db == 0) return "";
-        drift_count = hc_db_get_count (HC_CLOCK_DRIFT);
-        if (hc_db_get_size (HC_CLOCK_DRIFT) != sizeof(int)) {
-            fprintf (stderr, "[%s %d] wrong data structure for table %s\n",
-                     __FILE__, __LINE__, HC_CLOCK_DRIFT);
-            exit (1);
-        }
-    }
+    if (! hc_http_attach_drift()) return "";
 
     snprintf (JsonBuffer, sizeof(JsonBuffer),
               "{\"clock\":{\"drift\":[%d", drift_db[0]);
