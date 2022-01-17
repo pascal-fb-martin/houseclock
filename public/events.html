@@ -30,7 +30,7 @@ window.onload = function() {
    function showEvents (response) {
 
       if (!lastEventId) {
-          var title = response.host + ' - Kasa Devices';
+          var title = response.host + ' - NTP Events';
           document.getElementsByTagName ('title')[0].innerHTML = title;
           var elements = document.getElementsByClassName ('hostname');
           for (var i = 0; i < elements.length; i++) {
