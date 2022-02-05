@@ -9,6 +9,8 @@ function shortTime (time) {
 
 function clockUpdate (response) {
 
+    var title = response.host+' - NTP';
+    document.getElementsByTagName ('title')[0].innerHTML = title;
     document.getElementById('portal').href = 'http://'+response.proxy+'/index.html';
 
     var hasdata = false;
