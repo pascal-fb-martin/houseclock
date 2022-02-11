@@ -583,7 +583,8 @@ void hc_http (int argc, const char **argv) {
 
     echttp_default ("-http-service=dynamic");
 
-    if (echttp_open (argc, argv) <= 0) {
+    argc = echttp_open (argc, argv);
+    if (argc < 0) {
         fprintf (stderr, "[%s %d] echttp_open() failed\n", __FILE__, __LINE__);
         exit(1);
     }
