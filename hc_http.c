@@ -192,24 +192,25 @@ static void hc_background (int fd, int mode) {
             // Do not consider events that were already detected.
             //
             if (client->logged) continue;
+
+            int delta = (int)(client->origin.tv_sec - client->local.tv_sec);
+            const char *unit = "S";
  
-            if (abs(client->origin.tv_sec - client->local.tv_sec) > 600) {
-                houselog_event ("CLIENT", hc_broadcast_format (&(client->address)),
-                                "ACTIVE", "NOT SYNCHRONIZED");
-            } else {
+            if (abs(delta) >= 600) {
+                delta = delta / 60;
+                unit = "MN";
+            } else if (abs(delta) < 10) {
                 long adr = ntohl(client->address.sin_addr.s_addr);
                 int  hash = (int) ((adr & 0x7f) | ((adr & 0x100) >> 1));
-
-                int delta =
-                    ((client->origin.tv_sec - client->local.tv_sec) * 1000)
-                    + ((client->origin.tv_usec - client->local.tv_usec) / 1000);
-
-                if ((hc_known_clients[hash] == adr) && (abs(delta) < 10000)) continue;
-                houselog_event ("CLIENT", hc_broadcast_format (&(client->address)),
-                                "ACTIVE", "DELTA %d MS", delta);
-
+                if (hc_known_clients[hash] == adr) continue;
                 hc_known_clients[hash] = adr;
+
+                delta = (delta * 1000) +
+                   ((client->origin.tv_usec - client->local.tv_usec) / 1000);
+                unit = "MS";
             }
+            houselog_event ("CLIENT", hc_broadcast_format (&(client->address)),
+                            "ACTIVE", "DELTA %d %s", delta, unit);
             client->logged = 1;
         }
 
@@ -229,23 +230,24 @@ static void hc_background (int fd, int mode) {
             //
             if (server->logged) continue;
  
-            if (abs(server->origin.tv_sec - server->local.tv_sec) > 600) {
-                houselog_event ("SERVER", server->name, "ACTIVE",
-                                "STRATUM %d, NOT SYNCHRONIZED", server->stratum);
-            } else {
+            int delta = (int)(server->origin.tv_sec - server->local.tv_sec);
+            const char *unit = "S";
+ 
+            if (abs(delta) >= 600) {
+                delta = delta / 60;
+                unit = "MN";
+            } else if (abs(delta) < 10) {
                 long adr = ntohl(server->address.sin_addr.s_addr);
                 int  hash = (int) ((adr & 0x7f) | ((adr & 0x100) >> 1));
-
-                int delta =
-                    ((server->origin.tv_sec - server->local.tv_sec) * 1000)
-                    + ((server->origin.tv_usec - server->local.tv_usec) / 1000);
-
-                if ((hc_known_servers[hash] == adr) && (abs(delta) < 10000)) continue;
-                houselog_event ("SERVER", server->name, "ACTIVE",
-                                "STRATUM %d, DELTA %d MS", server->stratum, delta);
-
+                if (hc_known_servers[hash] == adr) continue;
                 hc_known_servers[hash] = adr;
+
+                delta = (delta * 1000) +
+                   ((server->origin.tv_usec - server->local.tv_usec) / 1000);
+                unit = "MS";
             }
+            houselog_event ("SERVER", server->name, "ACTIVE",
+                            "STRATUM %d, DELTA %d %s", server->stratum, delta, unit);
             server->logged = 1;
         }
         LastActivityCheck = now;
