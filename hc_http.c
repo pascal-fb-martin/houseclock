@@ -275,6 +275,24 @@ static void hc_background (int fd, int mode) {
         }
         LastDriftCheck = now;
     }
+
+    if (hc_http_attach_nmea()) {
+        static int GpsTimeLock = 0;
+
+        if (nmea_db->fix && nmea_db->gpsdate[0] && nmea_db->gpstime[0]) {
+            if (!GpsTimeLock) {
+                houselog_event
+                    ("GPS", houselog_host(), "ACQUIRED", "CLOCK %s %s", nmea_db->gpsdate, nmea_db->gpstime);
+                GpsTimeLock = 1;
+            }
+        } else {
+            if (GpsTimeLock) {
+                houselog_event
+                    ("GPS", houselog_host(), "LOST", "CLOCK");
+                GpsTimeLock = 0;
+            }
+        }
+    }
 }
 
 static size_t hc_http_status_gps (char *cursor, int size, const char *prefix) {
