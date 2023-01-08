@@ -477,7 +477,7 @@ void hc_ntp_periodic (const struct timeval *wakeup) {
 
     if (hc_nmea_active()) {
         if (hc_clock_synchronized() &&
-            (wakeup->tv_sec > latestBroadcast + hc_ntp_period)) {
+            (wakeup->tv_sec >= latestBroadcast + hc_ntp_period)) {
 
             struct timeval timestamp;
             int dispersion = hc_clock_dispersion();
