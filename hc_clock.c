@@ -185,6 +185,12 @@ static void hc_clock_adjust (time_t drift) {
 
     delta.tv_sec = (drift / 1000);
     delta.tv_usec = (drift % 1000) * 1000;
+    if (delta.tv_usec < 0) {
+        // Per the GNU libc documentation, tv_usec must be positive, and
+        // microsecond time = (tv_sec * 1000000) + tv_usec.
+        delta.tv_sec -= 1;
+        delta.tv_usec += 1000000;
+    }
     if (adjtime (&delta, NULL) != 0) {
         printf ("adjtime() error %d\n", errno);
     }
