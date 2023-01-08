@@ -4,21 +4,38 @@
 
 This is a project to create a stratum 1 SNTP server based on a local GPS time source for home use. This project depends on [echttp](https://github.com/pascal-fb-martin/echttp) and [HousePortal](https://github.com/pascal-fb-martin/houseportal).
 
-The main goal is to setup a local time server not dependent on an Internet link, that is easy to install, simple to configure and that can be monitored from a web browser. It automatically runs as a client when no GPS device is available.
+The main goal is to setup a local time server on a Raspberry Pi (or any Linux server) that is not dependent on an Internet link, is easy to install, simple to configure and that can be monitored from a web browser. It automatically runs as a client when no GPS device is available.
+
+This software is used to maintain a reasonably accurate time for eight IP security cameras and one sprinkler controller.
 
 ## What Makes HouseClock Different?
 
 This time server does not depend on a PPS (Pulse Per Second) interface. It works with any GPS device that sends common NMEA sentences, including cheap USB GPS receivers. It is easy to configure through a few command line options, with the defaults working with most Linux configurations.
 
-Unless debug mode was explicitly enabled, this software does not produce any log (periodic log could trash a SD card or eMMC storage), but its status is easily accessible through a Web interface.
+Why not use gpsd and ntpd? These are designed for PPS, which is not supported by most (any?) USB GPS receivers. The installation instructions are quite long and arcane. Many people have done it, but the average person will find it technically demanding. In addition, GPS receiver with PPS output are more difficult to find and more expensive.
 
-Why not use gpsd and ntpd? These are designed for PPS, which is not supported by most (any?) USB GPS receivers. The installation instructions are quite long and arcane. Many people have done it, but the average person will find it technically demanding.
+PPS is not necessary for most people: 1/10 second accuracy is more than enough for home use cases and most USB GPS receivers send the GPS fix within a few milliseconds anyway. On the flip side, the GPS receiver likely introduces a calculation latency, which might be variable. PPS is only needed with a slow GPS connection, or when really high accuracy is required, typically for scientific purpose..
 
-PPS is not necessary for most people: 1/10 second accuracy is more than enough for home use cases and most USB GPS receivers send the GPS fix within a few milliseconds anyway. On the flip side, the GPS receiver likely introduce a calculation latency, which might be variable. PPS is only needed with a slow GPS connection, and when really high accuracy is required, typically for scientific purpose..
+Unless debug mode was explicitly enabled, this software does not produce any traditional log (periodic log could trash a SD card or eMMC storage), however its status is easily accessible through a Web interface. The web interface provides both the current time and GPS information, and an history of events that covers interactions with time providers and clients.
 
-For slower speed USB receivers, this software detects the beginning of each GPS cycle, and calculates the timing of this cycle based on the receive time, the count of characters received and the transmission speed. GPS receivers tend to send the fix information in the first NMEA sentence, reducing the error estimate.
+## Accuracy
 
-Tests on a NTP-synchronized workstation with the VK-162 Usb GPS Navigation Module that can be bough for less than $15 show random variations that remain within a -10ms to 10ms range. The average delta with the synchronized time *slowly* changes between 40ms and 0ms: it could be an effect of fluctuation within the NTP synchronization itself (NTP pool on the Internet).
+By default the software tries to maintain a 10ms accuracy goal, i.e. it start adjusting the OS time when the drift is outside the -10ms to 10ms range. That goal is adjustable (option -precision=N) but 10ms is the best one can reasonably expect. This software does not support any accuracy goal below 10ms.
+
+The software runs two threads: one for time synchronization and NTP communication (high priority thread), the other for the web server (low priority thread).
+
+To further minimise timing errors, this software detects the beginning of each GPS cycle, and calculates the timing of this cycle based on the receive time, the count of characters received and the transmission speed. GPS receivers tend to send the fix information in the first NMEA sentence, reducing the error estimate.
+
+The delta between the OS time and the GPS time is still subject to some unpredictable variations due to OS scheduling, network and clock interrupts, or the GPS device internal timing. In order to avoid readjusting the clock continuously due to these, an average drift is calculated over a 10 seconds period when the time source is a GPS device.
+
+Tests show random variations that remain within a -20ms to 20ms range. The test was conducted in the following conditions:
+- VK-162 USB GPS Navigation Module (bought for less than $15).
+- Raspberry Pi 4, overall sustained CPU usage of around 20% (running motion).
+- Two Ethernet interfaces (one receiving four VGA video streams continuously).
+
+During that test, the Raspberry Pi clock experienced an averag drift of about 2ms to 4ms every 10 seconds, resulting into a cycle of adjustment every minute or so (adjust the clock down for about 30s, then let the clock drift for another 30s).
+
+Caution: if another time synchronization service is running, then the time delta may sometimes jump in the -50ms to 50ms range. To avoid this, the make install target detects and disables systemd-timesyncd, chrony and ntpd.
 
 ## Server Mode
 
@@ -28,7 +45,7 @@ This software runs as a stratum 1 time server if a GPS device is detected and a 
 
 When no GPS device is available, the software acts as a NTP broadcast client, listening to NTP broadcast messages. In this mode it will select a specific server as time source and stick to this server as long as it operates. If the current time source disappears, the client will switch to another available time source.
 
-In client mode, and while synchronized to a NTP broadcast server, the software acts as a NTP unicast server, stratum level set to the broadcast server's level plus one (i.e. stratum 2 is the broadcast server is stratum 1).
+In client mode, and while synchronized to a NTP broadcast server, the software acts as a NTP unicast server, stratum level set to the broadcast server's level plus one (i.e. stratum 2 if the broadcast server is stratum 1).
 
 ## Installation
 
@@ -39,7 +56,7 @@ In client mode, and while synchronized to a NTP broadcast server, the software a
 * make
 * sudo make install
 
-This installs HouseClock as a service (for Debian's systemd) and starts it. If ntpd or chrony was installed, this stops and disables it.
+This installs HouseClock as a service (for Debian's systemd) and starts it. If ntpd or chrony was installed, this stops and disables it. This also disables systemd-timesyncd.
 
 ## Configuration
 
