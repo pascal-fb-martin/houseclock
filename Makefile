@@ -33,6 +33,7 @@ package:
 install:
 	if [ -e /etc/init.d/houseclock ] ; then systemctl stop houseclock ; systemctl disable houseclock ; rm -f /etc/init.d/houseclock ; fi
 	if [ -e /lib/systemd/system/houseclock.service ] ; then systemctl stop houseclock ; systemctl disable houseclock ; rm -f /lib/systemd/system/houseclock.service ; fi
+	if [ -e /lib/systemd/system/systemd-timesyncd.service ] ; then systemctl stop systemd-timesyncd ; systemctl disable systemd-timesyncd ; fi
 	mkdir -p /usr/local/bin
 	rm -f /usr/local/bin/houseclock
 	cp houseclock /usr/local/bin

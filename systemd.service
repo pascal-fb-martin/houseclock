@@ -1,5 +1,5 @@
 [Unit]
-Description=The house clock synchronization server
+Description=The house time synchronization server
 After=network-online.target houseportal.service
 Conflicts=systemd-timesyncd.service
 
