@@ -30,7 +30,7 @@ function clockUpdate (response) {
             document.getElementById('precision').innerHTML = response.clock.time.precision+' ms';
             document.getElementById('drift').innerHTML = response.clock.time.drift+' ms';
             document.getElementById('avgdrift').innerHTML = response.clock.time.avgdrift+' ms';
-            var cycle = new Date(Math.round(response.clock.time.timestamp * 1000));
+            var cycle = new Date(Math.round(response.clock.time.cycle * 1000));
             document.getElementById('cycle').innerHTML = shortTime(cycle);
         } else {
             document.getElementById('precision').innerHTML = 'Not Synchronized';

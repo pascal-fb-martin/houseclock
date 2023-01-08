@@ -93,9 +93,10 @@ const char *hc_clock_help (int level) {
     return clockHelp[level];
 }
 
-static void hc_clock_start_learning (void) {
+static void hc_clock_start_learning (const struct timeval *local) {
     hc_clock_status_db->count = 0;
     hc_clock_status_db->accumulator = 0;
+    hc_clock_status_db->cycle = *local;
 }
 
 void hc_clock_initialize (int argc, const char **argv) {
@@ -131,7 +132,10 @@ void hc_clock_initialize (int argc, const char **argv) {
     hc_clock_status_db->synchronized = 0;
     hc_clock_status_db->precision = precision;
     hc_clock_status_db->drift = 0;
-    hc_clock_start_learning ();
+
+    struct timeval now;
+    gettimeofday (&now, NULL);
+    hc_clock_start_learning (&now);
 }
 
 static void hc_clock_force (const struct timeval *source,
@@ -202,7 +206,6 @@ void hc_clock_synchronize(const struct timeval *source,
 
     hc_clock_drift_db[source->tv_sec%HC_CLOCK_DRIFT_DEPTH] = (int)drift;
     hc_clock_status_db->drift = (int)drift;
-    hc_clock_status_db->timestamp = *local;
 
     if (clockShowDrift || hc_test_mode()) {
         printf ("[%d] %8.3f\n",
@@ -220,7 +223,7 @@ void hc_clock_synchronize(const struct timeval *source,
     if (FirstCall || absdrift >= 10000) {
         // Too much of a difference: force system time.
         hc_clock_force (source, local, latency);
-        hc_clock_start_learning();
+        hc_clock_start_learning(source);
         FirstCall = 0;
         return;
     }
@@ -261,7 +264,7 @@ void hc_clock_synchronize(const struct timeval *source,
         }
         hc_clock_adjust (drift);
     }
-    hc_clock_start_learning();
+    hc_clock_start_learning(local);
 }
 
 int hc_clock_synchronized (void) {

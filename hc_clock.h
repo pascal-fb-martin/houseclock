@@ -36,7 +36,7 @@ int  hc_clock_dispersion   (void);
 #define HC_CLOCK_STATUS "ClockStatus"
 
 typedef struct {
-    struct timeval timestamp;
+    struct timeval cycle;
     struct timeval reference;
     int   drift;
     int   avgdrift;

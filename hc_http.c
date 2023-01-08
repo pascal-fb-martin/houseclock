@@ -344,7 +344,7 @@ static size_t hc_http_status_time (char *cursor, int size, const char *prefix) {
     snprintf (cursor, size,
               "%s\"time\":{\"synchronized\":%s,\"reference\":%zd.%03d"
               ",\"precision\":%d,\"drift\":%d,\"avgdrift\":%d"
-              ",\"timestamp\":%zd.%03d}",
+              ",\"cycle\":%zd.%03d}",
               prefix,
               clock_db->synchronized?"true":"false",
               (size_t)clock_db->reference.tv_sec,
@@ -352,8 +352,8 @@ static size_t hc_http_status_time (char *cursor, int size, const char *prefix) {
               clock_db->precision,
               clock_db->drift,
               clock_db->avgdrift,
-              (size_t) (clock_db->timestamp.tv_sec),
-              clock_db->timestamp.tv_usec/1000);
+              (size_t) (clock_db->cycle.tv_sec),
+              clock_db->cycle.tv_usec/1000);
 
     return strlen(cursor);
 }
