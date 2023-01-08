@@ -270,7 +270,11 @@ int hc_clock_synchronized (void) {
 }
 
 void hc_clock_reference (struct timeval *reference) {
-    if (hc_clock_status_db == 0) return;
+    static struct timeval zero = {0, 0};
+    if (hc_clock_status_db == 0) {
+        *reference = zero;
+        return;
+    }
     *reference = hc_clock_status_db->reference;
 }
 
