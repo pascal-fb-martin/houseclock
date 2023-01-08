@@ -1,0 +1,14 @@
+[Unit]
+Description=The house clock synchronization server
+After=network-online.target houseportal.service
+Conflicts=systemd-timesyncd.service
+
+[Service]
+Environment="GPSOPTS=" "NTPOPTS=-ntp-period=10" "HTTPOPTS=" "OTHEROPTS="
+EnvironmentFile=-/etc/default/houseclock
+EnvironmentFile=-/etc/sysconfig/houseclock
+ExecStart=/usr/local/bin/houseclock $GPSOPTS $NTPOPTS $HTTPOPTS $OTHEROPTS
+
+[Install]
+WantedBy=multi-user.target
+

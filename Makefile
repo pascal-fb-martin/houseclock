@@ -31,13 +31,15 @@ package:
 	tar -cf packages/houseclock-`date +%F`.tgz houseclock init.debian Makefile
 
 install:
-	if [ -e /etc/init.d/houseclock ] ; then systemctl stop houseclock ; fi
+	if [ -e /etc/init.d/houseclock ] ; then systemctl stop houseclock ; systemctl disable houseclock ; rm -f /etc/init.d/houseclock ; fi
+	if [ -e /lib/systemd/system/houseclock.service ] ; then systemctl stop houseclock ; systemctl disable houseclock ; rm -f /lib/systemd/system/houseclock.service ; fi
 	mkdir -p /usr/local/bin
-	rm -f /usr/local/bin/houseclock /etc/init.d/houseclock
+	rm -f /usr/local/bin/houseclock
 	cp houseclock /usr/local/bin
-	cp init.debian /etc/init.d/houseclock
-	chown root:root /usr/local/bin/houseclock /etc/init.d/houseclock
-	chmod 755 /usr/local/bin/houseclock /etc/init.d/houseclock
+	chown root:root /usr/local/bin/houseclock
+	chmod 755 /usr/local/bin/houseclock
+	cp systemd.service /lib/systemd/system/houseclock.service
+	chown root:root /lib/systemd/system/houseclock.service
 	mkdir -p $(SHARE)/public/ntp
 	cp public/* $(SHARE)/public/ntp
 	chmod 644 $(SHARE)/public/ntp/*
@@ -52,7 +54,7 @@ uninstall:
 	systemctl stop houseclock
 	systemctl disable houseclock
 	rm -f /usr/local/bin/houseclock 
-	rm -f /etc/init.d/houseclock
+	rm -f /lib/systemd/system/houseclock.service /etc/init.d/houseclock
 	systemctl daemon-reload
 	if [ -e /etc/init.d/ntp ] ; then systemctl enable ntp ; systemctl start ntp ; fi
 	if [ -e /etc/init.d/chrony ] ; then systemctl enable chrony ; systemctl start chrony ; fi
