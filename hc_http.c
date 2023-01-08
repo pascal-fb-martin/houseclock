@@ -282,13 +282,13 @@ static void hc_background (int fd, int mode) {
         if (nmea_db->fix && nmea_db->gpsdate[0] && nmea_db->gpstime[0]) {
             if (!GpsTimeLock) {
                 houselog_event
-                    ("GPS", houselog_host(), "ACQUIRED", "CLOCK %s %s", nmea_db->gpsdate, nmea_db->gpstime);
+                    ("GPS", nmea_db->gpsdevice, "ACQUIRED", "CLOCK %s %s", nmea_db->gpsdate, nmea_db->gpstime);
                 GpsTimeLock = 1;
             }
         } else {
             if (GpsTimeLock) {
                 houselog_event
-                    ("GPS", houselog_host(), "LOST", "CLOCK");
+                    ("GPS", nmea_db->gpsdevice, "LOST", "CLOCK");
                 GpsTimeLock = 0;
             }
         }

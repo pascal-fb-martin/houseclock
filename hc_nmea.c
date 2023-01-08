@@ -182,6 +182,7 @@ static void hc_nmea_reset (void) {
     gpsCount = 0;
     hc_nmea_status_db->fix = 0;
     hc_nmea_status_db->fixtime = 0;
+    hc_nmea_status_db->gpsdevice[0] = 0;
     hc_nmea_status_db->gpsdate[0] = 0;
     hc_nmea_status_db->gpstime[0] = 0;
     hc_nmea_status_db->latitude[0] = 0;
@@ -225,12 +226,7 @@ void hc_nmea_initialize (int argc, const char **argv) {
     }
 
     hc_nmea_reset();
-    gpsTty = open(gpsDevice, O_RDONLY);
-
-    // Remove echo of characters from the GPS device.
-    if (gpsTty >= 0) {
-        hc_tty_set (gpsTty, gpsSpeed);
-    }
+    hc_nmea_listen ();
 
     gpsInitialized = time(0);
 }
@@ -605,6 +601,20 @@ void hc_nmea_periodic (const struct timeval *now) {
 }
 
 int hc_nmea_listen (void) {
+    if (gpsTty >= 0) return gpsTty;
+
+    static time_t LastTry = 0;
+    time_t now = time(0);
+    if (now < LastTry + 5) return gpsTty;
+
+    LastTry = now;
+    gpsTty = open(gpsDevice, O_RDONLY);
+    if (gpsTty < 0) return gpsTty;
+
+    // Remove echo of characters from the GPS device.
+    hc_tty_set (gpsTty, gpsSpeed);
+    snprintf (hc_nmea_status_db->gpsdevice,
+              sizeof(hc_nmea_status_db->gpsdevice), "%s", gpsDevice);
     return gpsTty;
 }
 

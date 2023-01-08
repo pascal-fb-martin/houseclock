@@ -44,6 +44,7 @@ typedef struct {
 typedef struct {
     char   fix;
     time_t fixtime;
+    char   gpsdevice[80];
     char   gpstime[20];
     char   gpsdate[20];
     char   latitude[20];
