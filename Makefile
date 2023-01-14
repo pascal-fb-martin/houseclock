@@ -54,6 +54,7 @@ install:
 uninstall:
 	systemctl stop houseclock
 	systemctl disable houseclock
+	rm -rf $(SHARE)/public/ntp
 	rm -f /usr/local/bin/houseclock 
 	rm -f /lib/systemd/system/houseclock.service /etc/init.d/houseclock
 	systemctl daemon-reload
