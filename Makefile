@@ -21,10 +21,10 @@ clean:
 rebuild: clean all
 
 %.o: %.c
-	gcc -c -g -O -o $@ $<
+	gcc -c -Os -o $@ $<
 
 houseclock: $(OBJS)
-	gcc -g -O -o houseclock $(OBJS) -lhouseportal -lechttp -lssl -lcrypto -lrt
+	gcc -Os -o houseclock $(OBJS) -lhouseportal -lechttp -lssl -lcrypto -lrt
 
 package:
 	mkdir -p packages
