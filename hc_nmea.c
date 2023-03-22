@@ -145,10 +145,6 @@ static int  gpsCount = 0;    // How much NMEA data is stored.
 
 #define GPS_EXPIRES 5
 
-// Memorize the latest NMEA values to detect changes.
-static char gpsDate[20];
-static char gpsTime[20];
-
 static const char *gpsDevice = "/dev/ttyACM0";
 static int gpsTty = -1;
 
@@ -305,7 +301,7 @@ static int hc_nmea_gettime (struct timeval *gmt) {
     if ((gpsDate[0] == 0) || (gpsTime[0] == 0)) return 0;
 
     // Decode the NMEA time into a GMT timeval value.
-    // TBD
+    // TBD: GPS rollover?
     localtime_r(&now, &local);
     local.tm_year = 100 + hc_nmea_2digit(gpsDate+4);
     local.tm_mon = hc_nmea_2digit(gpsDate+2) - 1;
@@ -359,6 +355,18 @@ static void hc_nmea_store_position (char **fields) {
     hc_nmea_status_db->fixtime = time(0);
 }
 
+static int hc_nmea_is_valid_talker (const char *name) {
+
+    // We only accept GP (GPS), GA (Galileo) and GL (Glonass).
+    static char isvalid[128] = {0};
+    if (!isvalid['P']) {
+        isvalid['P'] = isvalid['A'] = isvalid['L'] = 1;
+    }
+
+    if (name[0] != 'G') return 0;
+    return (int)(isvalid[name[1] & 0x7f]);
+}
+
 static int hc_nmea_decode (char *sentence) {
 
     char *fields[80]; // large enough for no overflow ever.
@@ -370,7 +378,11 @@ static int hc_nmea_decode (char *sentence) {
 
     count = hc_nmea_splitfields(sentence, fields);
 
-    if (strcmp ("GPRMC", fields[0]) == 0) {
+    if (!hc_nmea_is_valid_talker(fields[0])) return 0;
+
+    const char *message = fields[0] + 2;
+
+    if (strcmp ("RMC", message) == 0) {
         // GPRMC,time,A|V,lat,N|S,long,E|W,speed,course,date,variation,E|W,...
         if (count > 12) {
             if (hc_nmea_valid (fields[2], fields[12])) {
@@ -382,9 +394,9 @@ static int hc_nmea_decode (char *sentence) {
                 hc_nmea_status_db->fix = 0;
             }
         } else {
-            DEBUG printf ("Invalid GPRMC sentence: too few fields\n");
+            DEBUG printf ("Invalid RMC sentence: too few fields\n");
         }
-    } else if (strcmp ("GPGGA", fields[0]) == 0) {
+    } else if (strcmp ("GGA", message) == 0) {
         // GPGGA,time,lat,N|S,long,E|W,0|1|2|3|4|5|6|7|8,count,...
         if (count > 6) {
             char fix = fields[6][0];
@@ -396,9 +408,9 @@ static int hc_nmea_decode (char *sentence) {
                 hc_nmea_status_db->fix = 0;
             }
         } else {
-            DEBUG printf ("Invalid GPGGA sentence: too few fields\n");
+            DEBUG printf ("Invalid GGA sentence: too few fields\n");
         }
-    } else if (strcmp ("GPGLL", fields[0]) == 0) {
+    } else if (strcmp ("GLL", message) == 0) {
         // GPGLL,lat,N|S,long,E|W,time,A|V,A|D|E|N|S
         if (count > 7) {
             if (hc_nmea_valid (fields[6], fields[7])) {
@@ -408,9 +420,9 @@ static int hc_nmea_decode (char *sentence) {
                 hc_nmea_status_db->fix = 0;
             }
         } else {
-            DEBUG printf ("Invalid GPGLL sentence: too few fields\n");
+            DEBUG printf ("Invalid GLL sentence: too few fields\n");
         }
-    } else if (strcmp ("GPTXT", fields[0]) == 0) {
+    } else if (strcmp ("TXT", message) == 0) {
         int count = hc_nmea_status_db->textcount;
         if (count < HC_NMEA_TEXT_LINES) {
             strncpy (hc_nmea_status_db->text[count].line,
@@ -508,7 +520,7 @@ int hc_nmea_process (const struct timeval *received) {
                      bursttiming.tv_sec, bursttiming.tv_usec/1000);
         }
         // Whatever GPS time we got before is now old.
-        gpsTime[0] = 0;
+        hc_nmea_status_db->gpsdate[0] = hc_nmea_status_db->gpstime[0] = 0;
         flags = GPSFLAGS_NEWBURST;
     }
     previous = *received;
