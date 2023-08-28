@@ -1,0 +1,9 @@
+#!/bin/sh
+GPSOPTS=
+NTPOPTS=
+HTTPOPTS=
+OTHEROPTS=
+if [ -e /etc/default/houseclock ] ; then . /etc/default/houseclock ; fi
+sv start houseportal || exit 1
+exec /usr/local/bin/houseclock $GPSOPTS $NTPOPTS $HTTPOPTS $OTHEROPTS 
+

@@ -1,7 +1,29 @@
+# houseclock - A simple GPS Time Server with Web console
+#
+# Copyright 2023, Pascal Martin
+#
+# This program is free software; you can redistribute it and/or
+# modify it under the terms of the GNU General Public License
+# as published by the Free Software Foundation; either version 2
+# of the License, or (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program; if not, write to the Free Software
+# Foundation, Inc., 51 Franklin Street, Fifth Floor,
+# Boston, MA  02110-1301, USA.
+
+HAPP=houseclock
+HROOT=/usr/local
+SHARE=$(HROOT)/share/house
+
+# Application build. --------------------------------------------
 
 OBJS= hc_db.o hc_http.o hc_clock.o hc_tty.o hc_nmea.o hc_broadcast.o hc_ntp.o houseclock.o
-
-SHARE=/usr/local/share/house
 
 all: houseclock
 
@@ -34,69 +56,26 @@ package:
 
 # Distribution agnostic file installation -----------------------
 
-install-files:
-	mkdir -p /usr/local/bin
-	rm -f /usr/local/bin/houseclock
-	cp houseclock /usr/local/bin
-	chown root:root /usr/local/bin/houseclock
-	chmod 755 /usr/local/bin/houseclock
+install-app:
+	mkdir -p $(HROOT)/bin
+	rm -f $(HROOT)/bin/houseclock
+	cp houseclock $(HROOT)/bin
+	chown root:root $(HROOT)/bin/houseclock
+	chmod 755 $(HROOT)/bin/houseclock
 	mkdir -p $(SHARE)/public/ntp
 	cp public/* $(SHARE)/public/ntp
 	chmod 644 $(SHARE)/public/ntp/*
 	chmod 755 $(SHARE) $(SHARE)/public $(SHARE)/public/ntp
 
-uninstall-files:
+uninstall-app:
 	rm -rf $(SHARE)/public/ntp
-	rm -f /usr/local/bin/houseclock 
+	rm -f $(HROOT)/bin/houseclock 
+
+purge-app:
 
 purge-config:
 
-# Distribution agnostic systemd support -------------------------
+# System installation. ------------------------------------------
 
-install-systemd:
-	if [ -e /lib/systemd/system/systemd-timesyncd.service ] ; then systemctl stop systemd-timesyncd ; systemctl disable systemd-timesyncd ; fi
-	if [ -e /etc/init.d/ntp ] ; then systemctl stop ntp ; systemctl disable ntp ; fi
-	if [ -e /lib/systemd/system/ntp.service ] ; then systemctl stop ntp ; systemctl disable ntp ; fi
-	if [ -e /etc/init.d/chrony ] ; then systemctl stop chrony ; systemctl disable chrony ; fi
-	if [ -e /lib/systemd/system/chrony.service ] ; then systemctl stop chrony ; systemctl disable chrony ; fi
-	cp systemd.service /lib/systemd/system/houseclock.service
-	chown root:root /lib/systemd/system/houseclock.service
-	systemctl daemon-reload
-	systemctl enable houseclock
-	systemctl start houseclock
-
-uninstall-systemd: stop-systemd
-	if [ -e /lib/systemd/system/systemd-timesyncd.service ] ; then systemctl enable systemd-timesyncd ; systemctl start systemd-timesyncd ; fi
-	if [ -e /etc/init.d/ntp ] ; then systemctl enable ntp ; systemctl start ntp ; fi
-	if [ -e /lib/systemd/system/ntp.service ] ; then systemctl enable ntp ; systemctl start ntp ; fi
-	if [ -e /etc/init.d/chrony ] ; then systemctl enable chrony ; systemctl start chrony ; fi
-	if [ -e /lib/systemd/system/chrony.service ] ; then systemctl start chrony ; systemctl start chrony ; fi
-
-stop-systemd:
-	if [ -e /etc/init.d/houseclock ] ; then systemctl stop houseclock ; systemctl disable houseclock ; rm -f /etc/init.d/houseclock ; fi
-	if [ -e /lib/systemd/system/houseclock.service ] ; then systemctl stop houseclock ; systemctl disable houseclock ; rm -f /lib/systemd/system/houseclock.service ; fi
-
-# Debian GNU/Linux install --------------------------------------
-
-install-debian: stop-systemd install-files install-systemd
-
-uninstall-debian: uninstall-systemd uninstall-files
-
-purge-debian: uninstall-debian purge-config
-
-# Void Linux install --------------------------------------------
-
-install-void: install-files
-
-uninstall-void: uninstall-files
-
-purge-void: uninstall-void purge-config
-
-# Default install (Debian GNU/Linux) ----------------------------
-
-install: install-debian
-
-uninstall: uninstall-debian
-
-purge: purge-debian
+include $(SHARE)/install.mak
 
