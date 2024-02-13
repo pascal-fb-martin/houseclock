@@ -28,13 +28,13 @@ function clockUpdate (response) {
     if (response.clock.time) {
         if (response.clock.time.synchronized) {
             document.getElementById('precision').innerHTML = response.clock.time.precision+' ms';
-            document.getElementById('avgdrift').innerHTML = response.clock.time.avgdrift+' ms';
             var cycle = new Date(Math.round(response.clock.time.cycle * 1000));
             document.getElementById('cycle').innerHTML = shortTime(cycle);
         } else {
             document.getElementById('precision').innerHTML = 'Not Synchronized';
         }
         document.getElementById('drift').innerHTML = response.clock.time.drift+' ms';
+        document.getElementById('avgdrift').innerHTML = response.clock.time.avgdrift+' ms';
     }
     if (response.clock.ntp) {
         document.getElementById('source').innerHTML = response.clock.ntp.source;
