@@ -75,6 +75,12 @@ purge-app:
 
 purge-config:
 
+# Systemd specific: cleanup of other NTP servers.
+
+clean-systemd::
+	if [ -e /etc/init.d/ntp ] ; then systemctl stop ntp ; systemctl disable ntp ; fi
+	if [ -e /etc/init.d/chrony ] ; then systemctl stop chrony ; systemctl disable chrony ; fi
+
 # System installation. ------------------------------------------
 
 include $(SHARE)/install.mak
