@@ -293,6 +293,7 @@ static void hc_background (int fd, int mode) {
             }
         }
     }
+    houselog_background (now);
 }
 
 static size_t hc_http_status_gps (char *cursor, int size, const char *prefix) {
