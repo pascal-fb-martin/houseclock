@@ -171,7 +171,7 @@ static void hc_background (int fd, int mode) {
 
     if (hc_http_attach_ntp() && (now >= LastActivityCheck + 5)) {
 
-        // Generate events for new or unsynchronized clients.
+        // Generate local events for new or unsynchronized clients.
         // We generate a local "cache" of known clients to limit the number of
         // events generated when the clent is not synchronized. The cache key
         // is the low 7 bits of the IP address, plus the ninth bit: this works
@@ -209,8 +209,9 @@ static void hc_background (int fd, int mode) {
                    ((client->origin.tv_usec - client->local.tv_usec) / 1000);
                 unit = "MS";
             }
-            houselog_event ("CLIENT", hc_broadcast_format (&(client->address)),
-                            "ACTIVE", "DELTA %d %s", delta, unit);
+            houselog_event_local ("CLIENT",
+                                  hc_broadcast_format (&(client->address)),
+                                  "ACTIVE", "DELTA %d %s", delta, unit);
             client->logged = 1;
         }
 
