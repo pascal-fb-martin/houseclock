@@ -2,8 +2,12 @@
 Description=The house time synchronization server
 After=network-online.target houseportal.service
 Conflicts=systemd-timesyncd.service
+StartLimitIntervalSec=500
+StartLimitBurst=5
 
 [Service]
+Restart=on-failure
+RestartSec=50s
 Environment="GPSOPTS=" "NTPOPTS=-ntp-period=10" "HTTPOPTS=" "OTHEROPTS="
 EnvironmentFile=-/etc/default/houseclock
 EnvironmentFile=-/etc/sysconfig/houseclock
