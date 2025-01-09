@@ -49,6 +49,7 @@ In client mode, and while synchronized to a NTP broadcast server, the software a
 
 ## Installation
 
+* It is recommended to remove ModemManager, unless needed. On Debian: `sudo apt purge modemmanager ; sudo apt autoremove`. (The ModemManager service automatically tries to talk to USB serial devices, assuming that it must be a modem. This may cause occasional GPS link failures. Even while the GPS link is apparently quickly recovered, this is an annoyance easily avoided.)
 * Install the OpenSSL development package(s).
 * Install [echttp](https://github.com/pascal-fb-martin/echttp).
 * Install [HousePortal](https://github.com/pascal-fb-martin/houseportal).
