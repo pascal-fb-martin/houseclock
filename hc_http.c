@@ -136,7 +136,6 @@ static int hc_http_attach_ntp (void) {
 static void hc_background (int fd, int mode) {
 
     static time_t LastParentCheck = 0;
-    static time_t LastRenewal = 0;
     static time_t LastActivityCheck = 0;
     static time_t LastDriftCheck = 0;
 
@@ -144,7 +143,6 @@ static void hc_background (int fd, int mode) {
 
     if (now < LastParentCheck) {
         LastParentCheck = 0; // Always check when time changed backward.
-        LastRenewal = 0;
     }
 
     if (now >= LastParentCheck + 3) {
