@@ -59,8 +59,6 @@ static hc_ntp_status *ntp_db = 0;
 static int *drift_db = 0;
 static int drift_count;
 
-static int use_houseportal = 0;
-
 static char hc_hostname[256] = {0};
 
 static char JsonBuffer[16384];
@@ -156,17 +154,6 @@ static void hc_background (int fd, int mode) {
            exit(1);
        }
        LastParentCheck = now;
-    }
-
-    if (use_houseportal) {
-        static const char *path[] = {"clock:/ntp"};
-        if (now >= LastRenewal + 60) {
-            if (LastRenewal > 0)
-                houseportal_renew();
-            else
-                houseportal_register (echttp_port(4), path, 1);
-            LastRenewal = now;
-        }
     }
 
     if (hc_http_attach_ntp() && (now >= LastActivityCheck + 5)) {
@@ -294,6 +281,7 @@ static void hc_background (int fd, int mode) {
             }
         }
     }
+    houseportal_background (now);
     houselog_background (now);
 }
 
@@ -611,8 +599,9 @@ void hc_http (int argc, const char **argv) {
         exit(1);
     }
     if (echttp_dynamic_port()) {
+        static const char *path[] = {"clock:/ntp"};
         houseportal_initialize (argc, argv);
-        use_houseportal = 1;
+        houseportal_declare (echttp_port(4), path, 1);
     }
     houselog_initialize ("ntp", argc, argv);
 
