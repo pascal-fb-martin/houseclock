@@ -11,7 +11,6 @@ function clockUpdate (response) {
 
     var title = response.host+' - NTP';
     document.getElementsByTagName ('title')[0].innerHTML = title;
-    document.getElementById('portal').href = 'http://'+response.proxy+'/index.html';
 
     var hasdata = false;
     if (response.clock.gps) {
@@ -68,7 +67,6 @@ window.onload = function() {
    <tr><td>
    <table class="housetop">
    <tr>
-   <td><a id="portal" href="/index.html">Portal</a></td>
    <td><span>Clock</span></td>
    <td><a href="/ntp/events.html">Events</a></td>
    </tr>
