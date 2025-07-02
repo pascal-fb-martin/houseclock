@@ -56,16 +56,18 @@ package:
 
 # Distribution agnostic file installation -----------------------
 
-install-app:
+install-ui:
+	mkdir -p $(SHARE)/public/ntp
+	cp public/* $(SHARE)/public/ntp
+	chmod 644 $(SHARE)/public/ntp/*
+	chmod 755 $(SHARE) $(SHARE)/public $(SHARE)/public/ntp
+
+install-app: install-ui
 	mkdir -p $(HROOT)/bin
 	rm -f $(HROOT)/bin/houseclock
 	cp houseclock $(HROOT)/bin
 	chown root:root $(HROOT)/bin/houseclock
 	chmod 755 $(HROOT)/bin/houseclock
-	mkdir -p $(SHARE)/public/ntp
-	cp public/* $(SHARE)/public/ntp
-	chmod 644 $(SHARE)/public/ntp/*
-	chmod 755 $(SHARE) $(SHARE)/public $(SHARE)/public/ntp
 
 uninstall-app:
 	rm -rf $(SHARE)/public/ntp
