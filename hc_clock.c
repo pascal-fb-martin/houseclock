@@ -86,7 +86,7 @@ const char *hc_clock_help (int level) {
 
     static const char *clockHelp[] = {
         " [-drift] [-precision=N]",
-        "-drift        Print the measured drift (test mode).\n"
+        "-drift        Print the measured drift (test mode).",
         "-precision=N: precision of the time synchronization in milliseconds.",
         NULL
     };

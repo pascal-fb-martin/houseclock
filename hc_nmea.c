@@ -27,30 +27,45 @@
  *
  * Once a NMEA sentence has been decoded, the module determines:
  * - the status of the fix.
- * - the estimated timing of the $ in each NMEA sentence for the last 2 fixes.
+ * - the estimated timing of the $ in the NMEA sentence (see later).
  * - the GPS UTC time.
  *
  * In order to protect against GPS initialization problems, the module
  * waits for a GPS fix to have been available for 10 seconds before
  * using the GPS time.
  *
- * The module determines the first sentence of a fix as the sentence in
- * which the fix time changed.
+ * The module determines the first sentence of a fix cycle as the first
+ * sentence in the first data received after a 500ms silence interval.
  *
- * The transmission speed is calculated as the average transmission time
- * of the subsequent blocks of data within a fix. That speed is then used
- * to estimate the actual transmission time for any character in the NMEA
- * stream, and then retrieve when the start of the sentence was received.
- * This estimation is subject to instabilities: the goal is to reach a
- * precision of about 1/10 or 1/100 second, which is way more than needed
- * for a home network.
+ * The transmission speed is estimated based on the average transmission time
+ * of all subsequent blocks of data within a fix cycle. The initial speed
+ * value is set to a reasonable default for a USB pseudo serial.
  *
- * Once the module has decided which sentence came first, it uses the
- * estimated start time of this sentence as the comparison point with the
- * GPS time, i.e. the local time used to calculate the local time delta.
+ * That speed is then used to estimate the actual transmission time for
+ * any character in the NMEA stream, and then retrieve when the start of
+ * a sentence was received. This estimation is subject to instabilities:
+ * the goal is to reach a precision of about 1/10 or 1/100 second, which
+ * is way more than needed for a home network.
  *
- * If there is a different, adjtime() is called to correct the local time,
- * unless the delta is too large, in which case the time is just reset.
+ * There are two mode for estimating when the GPS data transmission started:
+ * - Normal mode: the module considers the first sentence that completed
+ *   the GPS fix data (time and position).
+ * - Burst mode: the module considers the first sentence of the complete
+ *   fix cycle (a.k.a. burst).
+ *
+ * These two mode are most often equivalent, as many GPS receivers start
+ * each cycle with GPSRMC, which provides both the time and position. In
+ * that case, the normal mode is more reliable as it relies on the content
+ * of the NMEA data instead of timing. This is why it is the default mode.
+ *
+ * Once the module has decided which sentence to consider, it uses the
+ * estimated start time of this sentence, minus the configured latency,
+ * as the comparison point with the GPS time, i.e. the local time used
+ * to calculate the local time delta.
+ *
+ * If there is a significant difference, adjtime() is called to correct
+ * the local time, unless the delta is too large, in which case the local
+ * time is just reset.
  *
  * SYNOPSYS:
  *
@@ -436,14 +451,10 @@ static int hc_nmea_decode (char *sentence) {
 
 static int hc_nmea_ready (int flags) {
 
-    const char *fixinfo = "old";
-    const char *burstinfo = "old";
-
-    if (flags & GPSFLAGS_NEWFIX) fixinfo = "new";
-    if (flags & GPSFLAGS_NEWBURST) burstinfo = "new";
-
-    if (flags) {
-        if(gpsShowNmea) printf ("(%s fix, %s burst)\n", fixinfo, burstinfo);
+    if (gpsShowNmea && flags) {
+        printf ("(%s fix, %s burst)\n",
+                (flags & GPSFLAGS_NEWFIX) ? "new" : "old",
+                (flags & GPSFLAGS_NEWBURST) ? "new" : "old");
     }
     return (flags == GPSFLAGS_NEWFIX+GPSFLAGS_NEWBURST);
 }
@@ -464,6 +475,17 @@ static void hc_nmea_timing (const struct timeval *received,
                             
 int hc_nmea_process (const struct timeval *received) {
 
+    // gpsTotal and gpsDuration are used to estimate the NMEA data's
+    // transfer speed. They represent accumulated statistics that are never
+    // reset, only divided by two when the values are too large (to lower
+    // the weight of older samples).
+    // Since the NMEA data arrives in periodic burst, this code cannot
+    // count the interval between two bursts in this estimate. To skip
+    // these intervals, it ignores the first block of data received after
+    // a 300ms "silence". (Might need improvement if all the NMEA data is
+    // received as a single block, in which case gpsTotal and gpsDuration
+    // would never be incremented.)
+    //
     static int64_t gpsTotal = 0;
     static int64_t gpsDuration = 0;
     static struct timeval previous;

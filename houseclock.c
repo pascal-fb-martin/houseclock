@@ -64,14 +64,21 @@ static void hc_help (const char *argv0) {
     int i = 1;
     const char *help;
 
-    printf ("%s [-h] [-debug] [-test]%s%s%s\n",
-            argv0, hc_ntp_help(0), hc_nmea_help(0), hc_http_help(0));
+    printf ("%s [-h] [-debug] [-test]%s%s%s%s\n",
+            argv0, hc_clock_help(0), hc_ntp_help(0), hc_nmea_help(0), hc_http_help(0));
 
     printf ("\nGeneral options:\n");
     printf ("   -h:              print this help.\n");
     printf ("   -debug           prints a lot of debug traces.\n");
     printf ("   -test            prints time drift compare to GPS.\n");
     printf ("   -db=N            Size of the internal database, in MB\n");
+
+    printf ("\nClock synchronization options:\n");
+    help = hc_clock_help(i=1);
+    while (help) {
+        printf ("   %s\n", help);
+        help = hc_clock_help(++i);
+    }
 
     printf ("\nNTP options:\n");
     help = hc_ntp_help(i=1);
@@ -115,7 +122,10 @@ int main (int argc, const char **argv) {
 
     int i;
     for (i = 1; i < argc; ++i) {
-        if (strcmp("-h", argv[i]) == 0) {
+        if (echttp_option_present ("-h", argv[i])) {
+            hc_help(argv[0]);
+        }
+        if (echttp_option_present ("-help", argv[i])) {
             hc_help(argv[0]);
         }
         echttp_option_match ("-db=", argv[i], &dbsizestr);
