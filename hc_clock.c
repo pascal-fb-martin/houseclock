@@ -77,9 +77,15 @@
 
 static int clockShowDrift = 0;
 
-#define HC_CLOCK_DRIFT_DEPTH 120
+// Allocate enough spaces in both tables for 6 minutes worth of data, which
+// allow some time to gather the previous 5 minutes statistics.
+//
+#define HC_CLOCK_DRIFT_DEPTH 360
+#define HC_CLOCK_ADJUST_DEPTH 360
+
 static hc_clock_status *hc_clock_status_db = 0;
 static int *hc_clock_drift_db = 0;
+static int *hc_clock_adjust_db = 0;
 
 
 const char *hc_clock_help (int level) {
@@ -120,7 +126,7 @@ void hc_clock_initialize (int argc, const char **argv) {
         exit (1);
     }
     hc_clock_drift_db = (int *) hc_db_get (HC_CLOCK_DRIFT);
-    for (i = 0; i < HC_CLOCK_DRIFT_DEPTH; ++i) hc_clock_drift_db[i] = 0;
+    for (i = HC_CLOCK_DRIFT_DEPTH - 1; i >= 0; --i) hc_clock_drift_db[i] = 0;
 
     i = hc_db_new (HC_CLOCK_STATUS, sizeof(hc_clock_status), 1);
     if (i != 0) {
@@ -132,6 +138,15 @@ void hc_clock_initialize (int argc, const char **argv) {
     hc_clock_status_db->synchronized = 0;
     hc_clock_status_db->precision = precision;
     hc_clock_status_db->drift = 0;
+
+    i = hc_db_new (HC_CLOCK_ADJUST, sizeof(int), HC_CLOCK_ADJUST_DEPTH);
+    if (i != 0) {
+        fprintf (stderr, "[%s %d] cannot create %s: %s\n",
+                 __FILE__, __LINE__, HC_CLOCK_ADJUST, strerror(i));
+        exit (1);
+    }
+    hc_clock_adjust_db = (int *)hc_db_get (HC_CLOCK_ADJUST);
+    for (i = HC_CLOCK_ADJUST_DEPTH -1; i >= 0; --i) hc_clock_adjust_db[i] = 0;
 
     struct timeval now;
     gettimeofday (&now, NULL);
@@ -197,6 +212,19 @@ static void hc_clock_adjust (time_t drift) {
     gettimeofday (&hc_clock_status_db->reference, NULL);
 }
 
+// Cleanup outdated metrics. It would be bad to increment these forever.
+//
+static void hc_clock_cleanup_adjust (time_t now) {
+
+    static time_t lastCleanup = 0;
+    if (!lastCleanup) lastCleanup = now; // First call.
+
+    while (lastCleanup < now) {
+        lastCleanup += 1;
+        hc_clock_adjust_db[lastCleanup%HC_CLOCK_ADJUST_DEPTH] = 0;
+    }
+}
+
 void hc_clock_synchronize(const struct timeval *source,
                           const struct timeval *local, int latency) {
 
@@ -205,12 +233,15 @@ void hc_clock_synchronize(const struct timeval *source,
     if (hc_clock_drift_db == 0) return;
     if (hc_clock_status_db == 0) return;
 
+    time_t now = time(0);
+    hc_clock_cleanup_adjust (now);
+
     time_t drift = ((source->tv_sec - local->tv_sec) * 1000)
                  + ((source->tv_usec - local->tv_usec) / 1000) + latency;
 
     time_t absdrift = (drift < 0)? (0 - drift) : drift;
 
-    hc_clock_drift_db[source->tv_sec%HC_CLOCK_DRIFT_DEPTH] = (int)drift;
+    hc_clock_drift_db[now%HC_CLOCK_DRIFT_DEPTH] = (int)drift;
     hc_clock_status_db->drift = (int)drift;
 
     if (clockShowDrift || hc_test_mode()) {
@@ -228,6 +259,7 @@ void hc_clock_synchronize(const struct timeval *source,
 
     if (FirstCall || absdrift >= 10000) {
         // Too much of a difference: force system time.
+        hc_clock_adjust_db[now%HC_CLOCK_ADJUST_DEPTH] += 1;
         hc_clock_force (source, local, latency);
         hc_clock_start_learning(source);
         FirstCall = 0;
@@ -268,6 +300,7 @@ void hc_clock_synchronize(const struct timeval *source,
             DEBUG printf ("Synchronization was lost.\n");
             hc_clock_status_db->synchronized = 0; // Lost it, for now.
         }
+        hc_clock_adjust_db[now%HC_CLOCK_ADJUST_DEPTH] += 1;
         hc_clock_adjust (drift);
     }
     hc_clock_start_learning(local);

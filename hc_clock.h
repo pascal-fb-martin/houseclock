@@ -32,6 +32,7 @@ int  hc_clock_dispersion   (void);
 /* Live database.
  */
 #define HC_CLOCK_DRIFT "ClockDrift"
+#define HC_CLOCK_ADJUST "ClockAdjust"
 
 #define HC_CLOCK_STATUS "ClockStatus"
 

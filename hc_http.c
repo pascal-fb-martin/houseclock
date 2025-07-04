@@ -58,10 +58,12 @@ static hc_nmea_status *nmea_db = 0;
 static hc_ntp_status *ntp_db = 0;
 static int *drift_db = 0;
 static int drift_count;
+static int *adjust_db = 0;
+static int adjust_count;
 
 static char hc_hostname[256] = {0};
 
-static char JsonBuffer[16384];
+static char JsonBuffer[65536];
 
 static void *hc_http_attach (const char *name) {
     void *p = hc_db_get (name);
@@ -96,6 +98,21 @@ static int hc_http_attach_drift (void) {
         if (hc_db_get_size (HC_CLOCK_DRIFT) != sizeof(int)) {
             fprintf (stderr, "[%s %d] wrong data structure for table %s\n",
                      __FILE__, __LINE__, HC_CLOCK_DRIFT);
+            exit (1);
+        }
+    }
+    return 1;
+}
+
+static int hc_http_attach_adjust (void) {
+
+    if (adjust_db == 0) {
+        adjust_db = (int *) hc_http_attach (HC_CLOCK_ADJUST);
+        if (adjust_db == 0) return 0;
+        adjust_count = hc_db_get_count (HC_CLOCK_ADJUST);
+        if (hc_db_get_size (HC_CLOCK_ADJUST) != sizeof(int)) {
+            fprintf (stderr, "[%s %d] wrong data structure for table %s\n",
+                     __FILE__, __LINE__, HC_CLOCK_ADJUST);
             exit (1);
         }
     }
@@ -466,17 +483,27 @@ static const char *hc_http_clockdrift (const char *method, const char *uri,
                                        const char *data, int length) {
 
     if (! hc_http_attach_drift()) return "";
+    if (! hc_http_attach_adjust()) return "";
 
-    snprintf (JsonBuffer, sizeof(JsonBuffer),
-              "{\"clock\":{\"drift\":[%d", drift_db[0]);
+    int len = snprintf (JsonBuffer, sizeof(JsonBuffer),
+                        "{\"timestamp\":%lld,\"clock\":{\"drift\":[%d",
+                        (long long)time(0), drift_db[0]);
 
-    int room = sizeof(JsonBuffer) - strlen(JsonBuffer);
-    char *p = JsonBuffer + (sizeof(JsonBuffer)-room);
+    int room = sizeof(JsonBuffer) - len;
+    char *p = JsonBuffer + len;
     int i;
     for (i = 1; i < drift_count; ++i) {
-        snprintf (p, room, ",%d", drift_db[i]);
-        room -= strlen(p);
-        p = JsonBuffer + (sizeof(JsonBuffer)-room);
+        len = snprintf (p, room, ",%d", drift_db[i]);
+        room -= len;
+        p += len;
+    }
+    len = snprintf (p, room, "],\"adjust\":[%d", adjust_db[0]);
+    room -= len;
+    p += len;
+    for (i = 1; i < adjust_count; ++i) {
+        len = snprintf (p, room, ",%d", adjust_db[i]);
+        room -= len;
+        p += len;
     }
     snprintf (p, room, "%s", "]}}");
     echttp_content_type_json();
