@@ -31,9 +31,6 @@ int  hc_clock_dispersion   (void);
 
 /* Live database.
  */
-#define HC_CLOCK_DRIFT "ClockDrift"
-#define HC_CLOCK_ADJUST "ClockAdjust"
-
 #define HC_CLOCK_STATUS "ClockStatus"
 
 typedef struct {
@@ -45,5 +42,13 @@ typedef struct {
     char  synchronized;
     char  count;
     int   accumulator;
+    int   sampling;
 } hc_clock_status;
+
+#define HC_CLOCK_METRICS "ClockMetrics"
+
+typedef struct {
+    int drift;
+    int adjust;
+} hc_clock_metrics;
 

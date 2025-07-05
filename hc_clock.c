@@ -77,15 +77,13 @@
 
 static int clockShowDrift = 0;
 
-// Allocate enough spaces in both tables for 6 minutes worth of data, which
-// allow some time to gather the previous 5 minutes statistics.
+// Allocate enough spaces in the metrics table for 6 minutes worth of data,
+// which allows some time to gather the previous 5 minutes statistics.
 //
-#define HC_CLOCK_DRIFT_DEPTH 360
-#define HC_CLOCK_ADJUST_DEPTH 360
+#define HC_CLOCK_METRICS_DEPTH 360
 
 static hc_clock_status *hc_clock_status_db = 0;
-static int *hc_clock_drift_db = 0;
-static int *hc_clock_adjust_db = 0;
+static hc_clock_metrics *hc_clock_metrics_db = 0;
 
 
 const char *hc_clock_help (int level) {
@@ -107,6 +105,8 @@ static void hc_clock_start_learning (const struct timeval *local) {
 
 void hc_clock_initialize (int argc, const char **argv) {
 
+    static hc_clock_metrics CleanMetrics = {0, 0};
+
     int i;
     int precision;
     const char *precision_option = "10"; // ms
@@ -119,14 +119,17 @@ void hc_clock_initialize (int argc, const char **argv) {
     }
     precision = atoi(precision_option);
 
-    i = hc_db_new (HC_CLOCK_DRIFT, sizeof(int), HC_CLOCK_DRIFT_DEPTH);
+    i = hc_db_new (HC_CLOCK_METRICS,
+                   sizeof(hc_clock_metrics), HC_CLOCK_METRICS_DEPTH);
     if (i != 0) {
         fprintf (stderr, "[%s %d] cannot create %s: %s\n",
-                 __FILE__, __LINE__, HC_CLOCK_DRIFT, strerror(i));
+                 __FILE__, __LINE__, HC_CLOCK_METRICS, strerror(i));
         exit (1);
     }
-    hc_clock_drift_db = (int *) hc_db_get (HC_CLOCK_DRIFT);
-    for (i = HC_CLOCK_DRIFT_DEPTH - 1; i >= 0; --i) hc_clock_drift_db[i] = 0;
+    hc_clock_metrics_db = (hc_clock_metrics *) hc_db_get (HC_CLOCK_METRICS);
+    for (i = HC_CLOCK_METRICS_DEPTH - 1; i >= 0; --i) {
+        hc_clock_metrics_db[i] = CleanMetrics;
+    }
 
     i = hc_db_new (HC_CLOCK_STATUS, sizeof(hc_clock_status), 1);
     if (i != 0) {
@@ -137,16 +140,8 @@ void hc_clock_initialize (int argc, const char **argv) {
     hc_clock_status_db = (hc_clock_status *)hc_db_get (HC_CLOCK_STATUS);
     hc_clock_status_db->synchronized = 0;
     hc_clock_status_db->precision = precision;
+    hc_clock_status_db->sampling = 0;
     hc_clock_status_db->drift = 0;
-
-    i = hc_db_new (HC_CLOCK_ADJUST, sizeof(int), HC_CLOCK_ADJUST_DEPTH);
-    if (i != 0) {
-        fprintf (stderr, "[%s %d] cannot create %s: %s\n",
-                 __FILE__, __LINE__, HC_CLOCK_ADJUST, strerror(i));
-        exit (1);
-    }
-    hc_clock_adjust_db = (int *)hc_db_get (HC_CLOCK_ADJUST);
-    for (i = HC_CLOCK_ADJUST_DEPTH -1; i >= 0; --i) hc_clock_adjust_db[i] = 0;
 
     struct timeval now;
     gettimeofday (&now, NULL);
@@ -221,32 +216,60 @@ static void hc_clock_cleanup_adjust (time_t now) {
 
     while (lastCleanup < now) {
         lastCleanup += 1;
-        hc_clock_adjust_db[lastCleanup%HC_CLOCK_ADJUST_DEPTH] = 0;
+        hc_clock_metrics_db[lastCleanup%HC_CLOCK_METRICS_DEPTH].adjust = 0;
     }
 }
 
 void hc_clock_synchronize(const struct timeval *source,
                           const struct timeval *local, int latency) {
 
-    static int FirstCall = 1;
+    static int CallPeriod = 0;
+    static int CallCount = 0;
+    static time_t LatestCall = 0;
 
-    if (hc_clock_drift_db == 0) return;
+    if (hc_clock_metrics_db == 0) return;
     if (hc_clock_status_db == 0) return;
 
     time_t now = time(0);
     hc_clock_cleanup_adjust (now);
+
+    time_t previous_call = LatestCall;
+    LatestCall = now;
+
+    if (previous_call) {
+        // Estimate the synchronization period by calculating an average that
+        // is rounded to the closest integer. That gives the sampling rate for
+        // the metrics recorded in this function.
+        //
+        int period = (int) (now - previous_call);
+        if (CallPeriod >= 200) {
+            // avoid calculation overflow and lingering effect when the
+            // synchronization period changes. Note that a limit of 200
+            // means that we readjust every 100 seconds, since the adjustment
+            // reset to 100 (not 0).
+            CallCount /= 2;
+            CallPeriod /= 2;
+        }
+        CallPeriod += (int) (now - previous_call);
+        CallCount += 1;
+        int average = (CallPeriod * 100) / CallCount;
+        if (average < 100) average = 1; // Don't get 0.
+        else if (average % 100 >= 50) average = (average / 100) + 1;
+        else average = (average / 100);
+        hc_clock_status_db->sampling = average;
+    }
 
     time_t drift = ((source->tv_sec - local->tv_sec) * 1000)
                  + ((source->tv_usec - local->tv_usec) / 1000) + latency;
 
     time_t absdrift = (drift < 0)? (0 - drift) : drift;
 
-    hc_clock_drift_db[now%HC_CLOCK_DRIFT_DEPTH] = (int)drift;
+    hc_clock_metrics_db[now%HC_CLOCK_METRICS_DEPTH].drift = (int)drift;
     hc_clock_status_db->drift = (int)drift;
 
     if (clockShowDrift || hc_test_mode()) {
         printf ("[%d] %8.3f\n",
-                local->tv_sec%HC_CLOCK_DRIFT_DEPTH, drift/1000.0);
+                local->tv_sec%HC_CLOCK_METRICS_DEPTH, drift/1000.0);
         if (hc_test_mode()) {
             if (absdrift < hc_clock_status_db->precision) {
                 hc_clock_status_db->synchronized = 1;
@@ -257,12 +280,11 @@ void hc_clock_synchronize(const struct timeval *source,
         }
     }
 
-    if (FirstCall || absdrift >= 10000) {
+    if ((!previous_call) || absdrift >= 10000) {
         // Too much of a difference: force system time.
-        hc_clock_adjust_db[now%HC_CLOCK_ADJUST_DEPTH] += 1;
+        hc_clock_metrics_db[now%HC_CLOCK_METRICS_DEPTH].adjust += 1;
         hc_clock_force (source, local, latency);
         hc_clock_start_learning(source);
-        FirstCall = 0;
         return;
     }
 
@@ -300,7 +322,7 @@ void hc_clock_synchronize(const struct timeval *source,
             DEBUG printf ("Synchronization was lost.\n");
             hc_clock_status_db->synchronized = 0; // Lost it, for now.
         }
-        hc_clock_adjust_db[now%HC_CLOCK_ADJUST_DEPTH] += 1;
+        hc_clock_metrics_db[now%HC_CLOCK_METRICS_DEPTH].adjust += 1;
         hc_clock_adjust (drift);
     }
     hc_clock_start_learning(local);

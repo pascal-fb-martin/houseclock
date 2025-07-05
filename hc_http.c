@@ -56,10 +56,8 @@ static long hc_known_servers[256]; // Enough to store IP v4 address.
 static hc_clock_status *clock_db = 0;
 static hc_nmea_status *nmea_db = 0;
 static hc_ntp_status *ntp_db = 0;
-static int *drift_db = 0;
-static int drift_count;
-static int *adjust_db = 0;
-static int adjust_count;
+static hc_clock_metrics *clock_metrics_db = 0;
+static int clock_metrics_count;
 
 static char hc_hostname[256] = {0};
 
@@ -89,30 +87,16 @@ static int hc_http_attach_clock (void) {
     return 1;
 }
 
-static int hc_http_attach_drift (void) {
+static int hc_http_attach_metrics (void) {
 
-    if (drift_db == 0) {
-        drift_db = (int *) hc_http_attach (HC_CLOCK_DRIFT);
-        if (drift_db == 0) return 0;
-        drift_count = hc_db_get_count (HC_CLOCK_DRIFT);
-        if (hc_db_get_size (HC_CLOCK_DRIFT) != sizeof(int)) {
+    if (clock_metrics_db == 0) {
+        clock_metrics_db =
+            (hc_clock_metrics *) hc_http_attach (HC_CLOCK_METRICS);
+        if (clock_metrics_db == 0) return 0;
+        clock_metrics_count = hc_db_get_count (HC_CLOCK_METRICS);
+        if (hc_db_get_size (HC_CLOCK_METRICS) != sizeof(hc_clock_metrics)) {
             fprintf (stderr, "[%s %d] wrong data structure for table %s\n",
-                     __FILE__, __LINE__, HC_CLOCK_DRIFT);
-            exit (1);
-        }
-    }
-    return 1;
-}
-
-static int hc_http_attach_adjust (void) {
-
-    if (adjust_db == 0) {
-        adjust_db = (int *) hc_http_attach (HC_CLOCK_ADJUST);
-        if (adjust_db == 0) return 0;
-        adjust_count = hc_db_get_count (HC_CLOCK_ADJUST);
-        if (hc_db_get_size (HC_CLOCK_ADJUST) != sizeof(int)) {
-            fprintf (stderr, "[%s %d] wrong data structure for table %s\n",
-                     __FILE__, __LINE__, HC_CLOCK_ADJUST);
+                     __FILE__, __LINE__, HC_CLOCK_METRICS);
             exit (1);
         }
     }
@@ -256,7 +240,8 @@ static void hc_background (int fd, int mode) {
         LastActivityCheck = now;
     }
 
-    if (hc_http_attach_drift() && (now >= LastDriftCheck + drift_count)) {
+    if (hc_http_attach_metrics() &&
+        (now >= LastDriftCheck + clock_metrics_count)) {
         int i;
         int max = 0;
         static int MaxDriftLogged = 0;
@@ -264,8 +249,9 @@ static void hc_background (int fd, int mode) {
         // Only record the "significant" drift events, or else too many
         // events would be generated.
         //
-        for (i = 0; i < drift_count; ++i) {
-            if (abs(max) < abs(drift_db[i])) max = drift_db[i];
+        for (i = 0; i < clock_metrics_count; ++i) {
+            int drift = clock_metrics_db[i].drift;
+            if (abs(max) < abs(drift)) max = drift;
         }
         if (max >= 10000) {
             if (abs(max) > MaxDriftLogged) {
@@ -479,29 +465,31 @@ static const char *hc_http_gps (const char *method, const char *uri,
     return JsonBuffer;
 }
 
-static const char *hc_http_clockdrift (const char *method, const char *uri,
-                                       const char *data, int length) {
+static const char *hc_http_metrics (const char *method, const char *uri,
+                                    const char *data, int length) {
 
-    if (! hc_http_attach_drift()) return "";
-    if (! hc_http_attach_adjust()) return "";
+    if (! hc_http_attach_metrics()) return "";
 
     int len = snprintf (JsonBuffer, sizeof(JsonBuffer),
-                        "{\"timestamp\":%lld,\"clock\":{\"drift\":[%d",
-                        (long long)time(0), drift_db[0]);
+                        "{\"timestamp\":%lld,\"clock\":{\"sampling\":%d"
+                            ",\"drift\":[%d",
+                        (long long)time(0),
+                        clock_db->sampling,
+                        clock_metrics_db[0].drift);
 
     int room = sizeof(JsonBuffer) - len;
     char *p = JsonBuffer + len;
     int i;
-    for (i = 1; i < drift_count; ++i) {
-        len = snprintf (p, room, ",%d", drift_db[i]);
+    for (i = 1; i < clock_metrics_count; ++i) {
+        len = snprintf (p, room, ",%d", clock_metrics_db[i].drift);
         room -= len;
         p += len;
     }
-    len = snprintf (p, room, "],\"adjust\":[%d", adjust_db[0]);
+    len = snprintf (p, room, "],\"adjust\":[%d", clock_metrics_db[0].adjust);
     room -= len;
     p += len;
-    for (i = 1; i < adjust_count; ++i) {
-        len = snprintf (p, room, ",%d", adjust_db[i]);
+    for (i = 1; i < clock_metrics_count; ++i) {
+        len = snprintf (p, room, ",%d", clock_metrics_db[i].adjust);
         room -= len;
         p += len;
     }
@@ -635,7 +623,8 @@ void hc_http (int argc, const char **argv) {
 
     echttp_route_uri ("/ntp/status", hc_http_status);
     echttp_route_uri ("/ntp/traffic", hc_http_traffic);
-    echttp_route_uri ("/ntp/drift", hc_http_clockdrift);
+    echttp_route_uri ("/ntp/metrics", hc_http_metrics);
+    echttp_route_uri ("/ntp/drift", hc_http_metrics); // Compatibility.
     echttp_route_uri ("/ntp/gps", hc_http_gps);
     echttp_route_uri ("/ntp/server", hc_http_ntp);
     echttp_static_route ("/", "/usr/local/share/house/public");
