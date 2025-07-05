@@ -23,7 +23,7 @@ SHARE=$(HROOT)/share/house
 
 # Application build. --------------------------------------------
 
-OBJS= hc_db.o hc_http.o hc_clock.o hc_tty.o hc_nmea.o hc_broadcast.o hc_ntp.o houseclock.o
+OBJS= hc_db.o hc_http.o hc_clock.o hc_tty.o hc_nmea.o hc_broadcast.o hc_ntp.o hc_metrics.o houseclock.o
 
 all: houseclock
 

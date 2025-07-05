@@ -41,6 +41,7 @@
 #include "hc_broadcast.h"
 #include "hc_clock.h"
 #include "hc_ntp.h"
+#include "hc_metrics.h"
 #include "hc_http.h"
 
 #include "echttp_cors.h"
@@ -465,8 +466,8 @@ static const char *hc_http_gps (const char *method, const char *uri,
     return JsonBuffer;
 }
 
-static const char *hc_http_metrics (const char *method, const char *uri,
-                                    const char *data, int length) {
+static const char *hc_http_drift (const char *method, const char *uri,
+                                  const char *data, int length) {
 
     if (! hc_http_attach_metrics()) return "";
 
@@ -494,6 +495,18 @@ static const char *hc_http_metrics (const char *method, const char *uri,
         p += len;
     }
     snprintf (p, room, "%s", "]}}");
+    echttp_content_type_json();
+    return JsonBuffer;
+}
+
+static const char *hc_http_metrics (const char *method, const char *uri,
+                                    const char *data, int length) {
+
+    if (! hc_http_attach_metrics()) return "";
+
+    int size = hc_metrics_status (time(0), hc_hostname, JsonBuffer, sizeof(JsonBuffer));
+
+    if (size <= 0) return "";
     echttp_content_type_json();
     return JsonBuffer;
 }
@@ -624,7 +637,7 @@ void hc_http (int argc, const char **argv) {
     echttp_route_uri ("/ntp/status", hc_http_status);
     echttp_route_uri ("/ntp/traffic", hc_http_traffic);
     echttp_route_uri ("/ntp/metrics", hc_http_metrics);
-    echttp_route_uri ("/ntp/drift", hc_http_metrics); // Compatibility.
+    echttp_route_uri ("/ntp/drift", hc_http_drift); // Old debug API.
     echttp_route_uri ("/ntp/gps", hc_http_gps);
     echttp_route_uri ("/ntp/server", hc_http_ntp);
     echttp_static_route ("/", "/usr/local/share/house/public");
