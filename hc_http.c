@@ -354,10 +354,27 @@ static const char *hc_http_metrics (const char *method, const char *uri,
 
     if (! hc_http_attach_metrics()) return "";
 
-    int size = hc_metrics_status (time(0), hc_hostname, JsonBuffer, sizeof(JsonBuffer));
+    int size = hc_metrics_status (JsonBuffer, sizeof(JsonBuffer), hc_hostname, time(0));
 
     if (size <= 0) return "";
     if (uri) echttp_content_type_json();
+    return JsonBuffer;
+}
+
+static const char *hc_http_details (const char *method, const char *uri,
+                                    const char *data, int length) {
+
+    if (! hc_http_attach_metrics()) return "";
+
+    time_t since = 0;
+    const char *sincearg = echttp_parameter_get ("since");
+    if (sincearg) {
+       since = (time_t) atoll (sincearg);
+    }
+    int size = hc_metrics_details (JsonBuffer, sizeof(JsonBuffer), hc_hostname, time(0), since);
+
+    if (size <= 0) return "";
+    echttp_content_type_json();
     return JsonBuffer;
 }
 
@@ -650,6 +667,7 @@ void hc_http (int argc, const char **argv) {
     echttp_route_uri ("/ntp/status", hc_http_status);
     echttp_route_uri ("/ntp/traffic", hc_http_traffic);
     echttp_route_uri ("/ntp/metrics", hc_http_metrics);
+    echttp_route_uri ("/ntp/metrics/details", hc_http_details);
     echttp_route_uri ("/ntp/drift", hc_http_drift); // Old debug API.
     echttp_route_uri ("/ntp/gps", hc_http_gps);
     echttp_route_uri ("/ntp/server", hc_http_ntp);

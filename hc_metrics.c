@@ -26,9 +26,14 @@
  *
  *    Setup the initial context.
  *
- * int hc_metrics_status (time_t now, const char *host, char *buffer, int size);
+ * int hc_metrics_status (char *buffer, int size, const char *host, time_t now);
  *
- *    Return the current metrics in JSON format.
+ *    Return the latest metrics in JSON format.
+ *
+ * int hc_metrics_details (char *buffer, int size,
+ *                         const char *host, time_t now, time_t since);
+ *
+ *    Return the full latest metrics in JSON format.
  */
 
 #include <sys/mman.h>
@@ -89,15 +94,13 @@ static int hc_metrics_attach_clock (void) {
 void hc_metrics_initialize (int argc, const char **argv) {
 }
 
-static int hc_metrics_aggregate (time_t end,
+static int hc_metrics_aggregate (time_t cursor, time_t end,
                                  long long *offset, long long *adjust) {
 
-    // Collect the data for the previous 5 minutes period.
+    // Collect the data for the specified period.
     // The data must be aggregated on the basis of the sampling rate,
     // which varies depending on the time source (GPS of another NTP server).
     //
-    time_t cursor = end - 300;
-
     int sampling = clock_db->sampling;
     if (sampling <= 0) return 0;
 
@@ -117,7 +120,7 @@ static int hc_metrics_aggregate (time_t end,
     return count;
 }
 
-int hc_metrics_status (time_t now, const char *host, char *buffer, int size) {
+int hc_metrics_status (char *buffer, int size, const char *host, time_t now) {
 
     if (! hc_metrics_attach_clock()) return 0;
 
@@ -132,7 +135,7 @@ int hc_metrics_status (time_t now, const char *host, char *buffer, int size) {
 
     long long offset[300];
     long long adjust[300];
-    int count = hc_metrics_aggregate (reference, offset, adjust);
+    int count = hc_metrics_aggregate (reference - 300, reference, offset, adjust);
     if (count <= 0) return 0; // No data to report.
 
     // Now that we have our final metrics for that 5 minutes period, lets
@@ -143,6 +146,51 @@ int hc_metrics_status (time_t now, const char *host, char *buffer, int size) {
 
     cursor += echttp_reduce_json (buffer+cursor, size-cursor,
                                   "adjust", adjust, count, "");
+    if (cursor >= size) return 0;
+    if (cursor <= start) return 0; // No data to report.
+
+    buffer[start] = '{';
+    cursor += snprintf (buffer+cursor, size-cursor, "}}}");
+    if (cursor >= size) return 0;
+
+    return cursor;
+}
+
+int hc_metrics_details (char *buffer, int size,
+                        const char *host, time_t now, time_t since) {
+
+    if (! hc_metrics_attach_clock()) return 0;
+
+    if (since < now - 300) since = now - 300;
+    int sampling = clock_db->sampling;
+
+    int cursor;
+    cursor = snprintf (buffer, size,
+                       "{\"host\":\"%s\","
+                            "\"timestamp\":%lld,\"Metrics\":{\"period\":300"
+                            ",\"clock\":",
+                       host, (long long)now);
+    int start = cursor;
+
+    time_t timestamp[300];
+    long long offset[300];
+    long long adjust[300];
+    int count = hc_metrics_aggregate (since, now, offset, adjust);
+    if (count <= 0) return 0; // No data to report.
+
+    int i;
+    for (i = 0; i < count; ++i) timestamp[i] = since + i;
+
+    // Now that we have our final metrics for that 5 minutes period, lets
+    // reduce it and report.
+    cursor += echttp_reduce_details_json (buffer+cursor, size-cursor, since,
+                                          "offset", "ms", now,
+                                          sampling, count, timestamp, offset);
+    if (cursor >= size) return 0;
+
+    cursor += echttp_reduce_details_json (buffer+cursor, size-cursor, since,
+                                          "adjust", "", now,
+                                          sampling, count, timestamp, adjust);
     if (cursor >= size) return 0;
     if (cursor <= start) return 0; // No data to report.
 

@@ -22,5 +22,7 @@
  */
 
 void hc_metrics_initialize (int argc, const char **argv);
-int hc_metrics_status (time_t now, const char *host, char *buffer, int size);
+int  hc_metrics_status (char *buffer, int size, const char *host, time_t now);
+int  hc_metrics_details (char *buffer, int size,
+                         const char *host, time_t now, time_t since);
 
