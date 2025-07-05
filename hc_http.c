@@ -48,6 +48,7 @@
 #include "echttp_static.h"
 #include "houseportalclient.h"
 #include "houselog.h"
+#include "houselog_storage.h"
 
 static pid_t parent;
 
@@ -132,159 +133,6 @@ static int hc_http_attach_ntp (void) {
         }
     }
     return 1;
-}
-
-
-static void hc_background (int fd, int mode) {
-
-    static time_t LastParentCheck = 0;
-    static time_t LastActivityCheck = 0;
-    static time_t LastDriftCheck = 0;
-
-    time_t now = time(0);
-
-    if (now < LastParentCheck) {
-        LastParentCheck = 0; // Always check when time changed backward.
-    }
-
-    if (now >= LastParentCheck + 3) {
-       if (kill (parent, 0) < 0) {
-           fprintf (stderr, "[%s %d] Parent disappeared, exit now\n",
-                    __FILE__, __LINE__);
-           exit(1);
-       }
-       LastParentCheck = now;
-    }
-
-    if (hc_http_attach_ntp() && (now >= LastActivityCheck + 5)) {
-
-        // Generate local events for new or unsynchronized clients.
-        // We generate a local "cache" of known clients to limit the number of
-        // events generated when the clent is not synchronized. The cache key
-        // is the low 7 bits of the IP address, plus the ninth bit: this works
-        // best for me because I have two subnets, while I don't have anywhere
-        // close to 127 machines at home.
-        // This should work fine for most home networks.
-        //
-        int i;
-        for (i = 0; i < HC_NTP_DEPTH; ++i) {
-            struct hc_ntp_client *client = ntp_db->clients + i;
-
-            // Do not consider events that are empty or too old (risk of
-            // race condition)
-            //
-            if ((client->local.tv_sec < LastActivityCheck)
-                    || (client->local.tv_sec == 0)) continue;
-
-            // Do not consider events that were already detected.
-            //
-            if (client->logged) continue;
-
-            int delta = (int)(client->origin.tv_sec - client->local.tv_sec);
-            const char *unit = "S";
- 
-            if (abs(delta) >= 600) {
-                delta = delta / 60;
-                unit = "MN";
-            } else if (abs(delta) < 10) {
-                long adr = ntohl(client->address.sin_addr.s_addr);
-                int  hash = (int) ((adr & 0x7f) | ((adr & 0x100) >> 1));
-                if (hc_known_clients[hash] == adr) continue;
-                hc_known_clients[hash] = adr;
-
-                delta = (delta * 1000) +
-                   ((client->origin.tv_usec - client->local.tv_usec) / 1000);
-                unit = "MS";
-            }
-            houselog_event_local ("CLIENT",
-                                  hc_broadcast_format (&(client->address)),
-                                  "ACTIVE", "DELTA %d %s", delta, unit);
-            client->logged = 1;
-        }
-
-        // Generate events for newly detected servers, using a similar cache
-        // as for clients to limit the rate of events when synchronized.
-        //
-        for (i = 0; i < HC_NTP_POOL; ++i) {
-            struct hc_ntp_server *server = ntp_db->pool + i;
-
-            // Do not consider events that are empty or too old (risk of
-            // race condition)
-            //
-            if ((server->local.tv_sec < LastActivityCheck)
-                    || (server->local.tv_sec == 0)) continue;
-
-            // Do not consider events that were already detected.
-            //
-            if (server->logged) continue;
- 
-            int delta = (int)(server->origin.tv_sec - server->local.tv_sec);
-            const char *unit = "S";
- 
-            if (abs(delta) >= 600) {
-                delta = delta / 60;
-                unit = "MN";
-            } else if (abs(delta) < 10) {
-                long adr = ntohl(server->address.sin_addr.s_addr);
-                int  hash = (int) ((adr & 0x7f) | ((adr & 0x100) >> 1));
-                if (hc_known_servers[hash] == adr) continue;
-                hc_known_servers[hash] = adr;
-
-                delta = (delta * 1000) +
-                   ((server->origin.tv_usec - server->local.tv_usec) / 1000);
-                unit = "MS";
-            }
-            houselog_event ("SERVER", server->name, "ACTIVE",
-                            "STRATUM %d, DELTA %d %s", server->stratum, delta, unit);
-            server->logged = 1;
-        }
-        LastActivityCheck = now;
-    }
-
-    if (hc_http_attach_metrics() &&
-        (now >= LastDriftCheck + clock_metrics_count)) {
-        int i;
-        int max = 0;
-        static int MaxDriftLogged = 0;
-
-        // Only record the "significant" drift events, or else too many
-        // events would be generated.
-        //
-        for (i = 0; i < clock_metrics_count; ++i) {
-            int drift = clock_metrics_db[i].drift;
-            if (abs(max) < abs(drift)) max = drift;
-        }
-        if (max >= 10000) {
-            if (abs(max) > MaxDriftLogged) {
-                houselog_event
-                    ("CLOCK", houselog_host(), "DRIFT", "BY %d MS", max);
-                MaxDriftLogged = abs(max);
-            }
-        } else {
-            MaxDriftLogged = 0; // That drift was repaired.
-        }
-        LastDriftCheck = now;
-    }
-
-    if (hc_http_attach_nmea()) {
-        static int GpsTimeLock = 0;
-
-        if (nmea_db->fix && nmea_db->gpsdate[0] && nmea_db->gpstime[0]) {
-            if (!GpsTimeLock) {
-                houselog_event
-                    ("GPS", nmea_db->gpsdevice, "ACQUIRED", "CLOCK %s %s", nmea_db->gpsdate, nmea_db->gpstime);
-                GpsTimeLock = 1;
-            }
-        } else {
-            if (GpsTimeLock) {
-                houselog_event
-                    ("GPS", nmea_db->gpsdevice, "LOST", "CLOCK");
-                GpsTimeLock = 0;
-            }
-        }
-    }
-    houseportal_background (now);
-    houselog_background (now);
 }
 
 static size_t hc_http_status_gps (char *cursor, int size, const char *prefix) {
@@ -499,6 +347,8 @@ static const char *hc_http_drift (const char *method, const char *uri,
     return JsonBuffer;
 }
 
+// Warning: this can be called in the background as well, not just from
+// an HTTP request.
 static const char *hc_http_metrics (const char *method, const char *uri,
                                     const char *data, int length) {
 
@@ -507,7 +357,7 @@ static const char *hc_http_metrics (const char *method, const char *uri,
     int size = hc_metrics_status (time(0), hc_hostname, JsonBuffer, sizeof(JsonBuffer));
 
     if (size <= 0) return "";
-    echttp_content_type_json();
+    if (uri) echttp_content_type_json();
     return JsonBuffer;
 }
 
@@ -601,6 +451,169 @@ static const char *hc_http_traffic (const char *method, const char *uri,
 
     echttp_content_type_json();
     return JsonBuffer;
+}
+
+static void hc_background (int fd, int mode) {
+
+    static time_t LastParentCheck = 0;
+    static time_t LastActivityCheck = 0;
+    static time_t LastDriftCheck = 0;
+
+    time_t now = time(0);
+
+    if (now < LastParentCheck) {
+        LastParentCheck = 0; // Always check when time changed backward.
+    }
+
+    if (now >= LastParentCheck + 3) {
+       if (kill (parent, 0) < 0) {
+           fprintf (stderr, "[%s %d] Parent disappeared, exit now\n",
+                    __FILE__, __LINE__);
+           exit(1);
+       }
+       LastParentCheck = now;
+    }
+
+    if (hc_http_attach_ntp() && (now >= LastActivityCheck + 5)) {
+
+        // Generate local events for new or unsynchronized clients.
+        // We generate a local "cache" of known clients to limit the number of
+        // events generated when the clent is not synchronized. The cache key
+        // is the low 7 bits of the IP address, plus the ninth bit: this works
+        // best for me because I have two subnets, while I don't have anywhere
+        // close to 127 machines at home.
+        // This should work fine for most home networks.
+        //
+        int i;
+        for (i = 0; i < HC_NTP_DEPTH; ++i) {
+            struct hc_ntp_client *client = ntp_db->clients + i;
+
+            // Do not consider events that are empty or too old (risk of
+            // race condition)
+            //
+            if ((client->local.tv_sec < LastActivityCheck)
+                    || (client->local.tv_sec == 0)) continue;
+
+            // Do not consider events that were already detected.
+            //
+            if (client->logged) continue;
+
+            int delta = (int)(client->origin.tv_sec - client->local.tv_sec);
+            const char *unit = "S";
+ 
+            if (abs(delta) >= 600) {
+                delta = delta / 60;
+                unit = "MN";
+            } else if (abs(delta) < 10) {
+                long adr = ntohl(client->address.sin_addr.s_addr);
+                int  hash = (int) ((adr & 0x7f) | ((adr & 0x100) >> 1));
+                if (hc_known_clients[hash] == adr) continue;
+                hc_known_clients[hash] = adr;
+
+                delta = (delta * 1000) +
+                   ((client->origin.tv_usec - client->local.tv_usec) / 1000);
+                unit = "MS";
+            }
+            houselog_event_local ("CLIENT",
+                                  hc_broadcast_format (&(client->address)),
+                                  "ACTIVE", "DELTA %d %s", delta, unit);
+            client->logged = 1;
+        }
+
+        // Generate events for newly detected servers, using a similar cache
+        // as for clients to limit the rate of events when synchronized.
+        //
+        for (i = 0; i < HC_NTP_POOL; ++i) {
+            struct hc_ntp_server *server = ntp_db->pool + i;
+
+            // Do not consider events that are empty or too old (risk of
+            // race condition)
+            //
+            if ((server->local.tv_sec < LastActivityCheck)
+                    || (server->local.tv_sec == 0)) continue;
+
+            // Do not consider events that were already detected.
+            //
+            if (server->logged) continue;
+ 
+            int delta = (int)(server->origin.tv_sec - server->local.tv_sec);
+            const char *unit = "S";
+ 
+            if (abs(delta) >= 600) {
+                delta = delta / 60;
+                unit = "MN";
+            } else if (abs(delta) < 10) {
+                long adr = ntohl(server->address.sin_addr.s_addr);
+                int  hash = (int) ((adr & 0x7f) | ((adr & 0x100) >> 1));
+                if (hc_known_servers[hash] == adr) continue;
+                hc_known_servers[hash] = adr;
+
+                delta = (delta * 1000) +
+                   ((server->origin.tv_usec - server->local.tv_usec) / 1000);
+                unit = "MS";
+            }
+            houselog_event ("SERVER", server->name, "ACTIVE",
+                            "STRATUM %d, DELTA %d %s", server->stratum, delta, unit);
+            server->logged = 1;
+        }
+        LastActivityCheck = now;
+    }
+
+    if (hc_http_attach_metrics() &&
+        (now >= LastDriftCheck + clock_metrics_count)) {
+        int i;
+        int max = 0;
+        static int MaxDriftLogged = 0;
+
+        // Only record the "significant" drift events, or else too many
+        // events would be generated.
+        //
+        for (i = 0; i < clock_metrics_count; ++i) {
+            int drift = clock_metrics_db[i].drift;
+            if (abs(max) < abs(drift)) max = drift;
+        }
+        if (max >= 10000) {
+            if (abs(max) > MaxDriftLogged) {
+                houselog_event
+                    ("CLOCK", houselog_host(), "DRIFT", "BY %d MS", max);
+                MaxDriftLogged = abs(max);
+            }
+        } else {
+            MaxDriftLogged = 0; // That drift was repaired.
+        }
+        LastDriftCheck = now;
+    }
+
+    static time_t NextMetricsStore = 0;
+    if (hc_http_attach_metrics() && (now >= NextMetricsStore)) {
+        if (!NextMetricsStore) {
+            NextMetricsStore = now - (now % 300) + 305;
+        } else {
+            NextMetricsStore += 300;
+            const char *data = hc_http_metrics (0, 0, 0, 0);
+            if (data && data[0]) houselog_storage_flush ("metrics", data);
+        }
+    }
+
+    if (hc_http_attach_nmea()) {
+        static int GpsTimeLock = 0;
+
+        if (nmea_db->fix && nmea_db->gpsdate[0] && nmea_db->gpstime[0]) {
+            if (!GpsTimeLock) {
+                houselog_event
+                    ("GPS", nmea_db->gpsdevice, "ACQUIRED", "CLOCK %s %s", nmea_db->gpsdate, nmea_db->gpstime);
+                GpsTimeLock = 1;
+            }
+        } else {
+            if (GpsTimeLock) {
+                houselog_event
+                    ("GPS", nmea_db->gpsdevice, "LOST", "CLOCK");
+                GpsTimeLock = 0;
+            }
+        }
+    }
+    houseportal_background (now);
+    houselog_background (now);
 }
 
 const char *hc_http_help (int level) {
