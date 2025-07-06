@@ -103,18 +103,26 @@ static int hc_metrics_aggregate (time_t cursor, time_t end,
     if (sampling <= 0) return 0;
 
     int count = 0;
-    offset[0] = adjust[0] = 0;
+    int subcount = 0;
+    int offset_accumulator = 0;
+    int adjust_accumulator = 0;
     while (cursor < end) {
         int index = (int) (cursor % clock_metrics_count);
-        offset[count] += abs(clock_metrics_db[index].drift);
-        adjust[count] += clock_metrics_db[index].adjust;
+        offset_accumulator += abs(clock_metrics_db[index].drift);
+        adjust_accumulator += clock_metrics_db[index].adjust;
         cursor += 1;
-        if ((cursor % sampling) == 0) {
+        if (++subcount >= sampling) {
+            offset[count] = offset_accumulator;
+            adjust[count] = adjust_accumulator;
             count += 1;
-            if (cursor < end) offset[count] = adjust[count] = 0;
+            subcount = offset_accumulator = adjust_accumulator = 0;
         }
     }
-    if ((cursor % sampling) > 0) count += 1; // Include last item.
+    if (subcount > 0) {
+        offset[count] = offset_accumulator;
+        adjust[count] = adjust_accumulator;
+        count += 1; // Include last item.
+    }
     return count;
 }
 
@@ -122,13 +130,15 @@ int hc_metrics_status (char *buffer, int size, const char *host, time_t now) {
 
     if (! hc_metrics_attach_clock()) return 0;
 
-    time_t reference = now - (now % 300);
+    time_t reference = now - 1; // Avoid the current second: still counting.
+    reference -= (reference % 300); // Aligned on a 5 minutes period.
+
     int cursor;
     cursor = snprintf (buffer, size,
                        "{\"host\":\"%s\","
                             "\"timestamp\":%lld,\"metrics\":{\"period\":300"
-                            ",\"clock\":",
-                       host, (long long)reference);
+                            ",\"sampling\":%d,\"clock\":",
+                       host, clock_db->sampling, (long long)reference);
     int start = cursor;
 
     long long offset[300];
@@ -159,21 +169,24 @@ int hc_metrics_details (char *buffer, int size,
 
     if (! hc_metrics_attach_clock()) return 0;
 
-    if (since < now - 300) since = now - 300;
     int sampling = clock_db->sampling;
+    time_t reference = now - 1; // Avoid the current second: still counting.
+    reference -= (reference % sampling); // Aligned on the sampling period.
+
+    if (since < reference - 300) since = reference - 300;
 
     int cursor;
     cursor = snprintf (buffer, size,
                        "{\"host\":\"%s\","
                             "\"timestamp\":%lld,\"Metrics\":{\"period\":300"
-                            ",\"clock\":",
-                       host, (long long)now);
+                            ",\"sampling\":%d,\"clock\":",
+                       host, sampling, (long long)reference);
     int start = cursor;
 
     time_t timestamp[300];
     long long offset[300];
     long long adjust[300];
-    int count = hc_metrics_aggregate (since, now, offset, adjust);
+    int count = hc_metrics_aggregate (since, reference, offset, adjust);
     if (count <= 0) return 0; // No data to report.
 
     int i;
@@ -182,12 +195,12 @@ int hc_metrics_details (char *buffer, int size,
     // Now that we have our final metrics for that 5 minutes period, lets
     // reduce it and report.
     cursor += echttp_reduce_details_json (buffer+cursor, size-cursor, since,
-                                          "offset", "ms", now,
+                                          "offset", "ms", reference,
                                           sampling, count, timestamp, offset);
     if (cursor >= size) return 0;
 
     cursor += echttp_reduce_details_json (buffer+cursor, size-cursor, since,
-                                          "adjust", "", now,
+                                          "adjust", "", reference,
                                           sampling, count, timestamp, adjust);
     if (cursor >= size) return 0;
     if (cursor <= start) return 0; // No data to report.
