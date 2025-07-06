@@ -54,8 +54,6 @@ static hc_clock_status *clock_db = 0;
 static hc_clock_metrics *clock_metrics_db = 0;
 static int clock_metrics_count;
 
-static char hc_hostname[256] = {0};
-
 static void *hc_metrics_attach (const char *name) {
     void *p = hc_db_get (name);
     if (p == 0) {

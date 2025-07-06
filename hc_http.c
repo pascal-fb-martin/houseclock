@@ -231,9 +231,6 @@ static const char *hc_http_status (const char *method, const char *uri,
     const char *prefix = "";
     int added;
 
-    if (hc_hostname[0] == 0) {
-        gethostname (hc_hostname, sizeof(hc_hostname));
-    }
     added = snprintf (cursor, size,
                       "{\"host\":\"%s\",\"proxy\":\"%s\",\"timestamp\":%ld,\"clock\":{",
                       hc_hostname, houseportal_server(), (long)time(0));
@@ -646,6 +643,7 @@ void hc_http (int argc, const char **argv) {
     char *service;
 
     parent = getppid();
+    gethostname (hc_hostname, sizeof(hc_hostname));
 
     echttp_default ("-http-service=dynamic");
 
