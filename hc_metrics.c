@@ -102,8 +102,8 @@ void hc_metrics_initialize (int argc, const char **argv) {
 // The raw clock metrics are sparse (index of 1 second vs. variable sampling
 // rate) and need to be aggregated into a compact form.
 //
-static void hc_metrics_aggregate (time_t since, time_t cursor,
-                                  long long *offset, long long *adjust) {
+static int hc_metrics_aggregate (time_t since, time_t cursor,
+                                 long long *offset, long long *adjust) {
 
     // Collect the data for the specified period.
     // The data must be aggregated on the basis of the sampling rate,
@@ -111,6 +111,7 @@ static void hc_metrics_aggregate (time_t since, time_t cursor,
     //
     int sampling = clock_db->sampling;
 
+    int count = 0;
     int subcount = 0;
     int offset_accumulator = 0;
     int adjust_accumulator = 0;
@@ -122,6 +123,7 @@ static void hc_metrics_aggregate (time_t since, time_t cursor,
         cursor -= 1;
         if (++subcount >= sampling) {
 TRACE ("hc_metrics_aggregate: accumulated offset = %d, adjust = %d at source index %d, destination %d\n", offset_accumulator, adjust_accumulator, source, destination);
+            count += 1;
             offset[destination] = offset_accumulator;
             adjust[destination] = adjust_accumulator;
             subcount = offset_accumulator = adjust_accumulator = 0;
@@ -129,20 +131,38 @@ TRACE ("hc_metrics_aggregate: accumulated offset = %d, adjust = %d at source ind
         }
     }
     if (subcount > 0) {
+        count += 1;
         offset[destination] = offset_accumulator;
         adjust[destination] = adjust_accumulator;
     }
+    return count;
+}
+
+static long long *hc_metrics_align (time_t end, int sampling,
+                                    long long *data, int count) {
+
+    static long long aligned[METRICS_STATUS_DEPTH];
+
+    int i;
+    int index = (int) ((end / sampling) % METRICS_STATUS_DEPTH);
+    for (i = count-1; i >= 0; --i) {
+        aligned[i] = data[index];
+        if (--index < 0) index = METRICS_STATUS_DEPTH-1;
+    }
+    return aligned;
 }
 
 int hc_metrics_status (char *buffer, int size, const char *host, time_t now) {
 
     if (! hc_metrics_attach_clock()) return 0;
-    if (clock_db->sampling <= 0) return 0;
+    int sampling = clock_db->sampling;
+    if (sampling <= 0) return 0;
 
     time_t reference = now - 1; // Avoid the current second: still counting.
     reference -= (reference % METRICS_STATUS_DEPTH); // Aligned.
     time_t origin = reference - METRICS_STATUS_DEPTH;
     if (origin < StartupTime) return 0; // Too early.
+TRACE ("hc_metrics_status: origin = %lld, reference = %lld\n", (long long)origin, (long long)reference);
 
     int cursor;
     cursor = snprintf (buffer, size,
@@ -154,16 +174,28 @@ int hc_metrics_status (char *buffer, int size, const char *host, time_t now) {
 
     long long offset[METRICS_STATUS_DEPTH];
     long long adjust[METRICS_STATUS_DEPTH];
-    hc_metrics_aggregate (origin, reference, offset, adjust);
+    int count = hc_metrics_aggregate (origin, reference, offset, adjust);
+
+    // The data has been aggregated, but the array are not fully filled
+    // and the data does not always start at index 0 if sampling > 1.
+    // In that case the data must be shifted to start at 0 before reduction.
+    // (Otherwise the reduction would use uninitialized memory..)
+    long long *usable;
 
     // Now that the final metrics for the reporting period are ready,
     // lets reduce and report.
+    usable = offset;
+    if (sampling > 1)
+        usable = hc_metrics_align (reference, sampling, offset, count);
     cursor += echttp_reduce_json (buffer+cursor, size-cursor,
-                                  "offset", offset, METRICS_STATUS_DEPTH, "ms");
+                                  "offset", usable, count, "ms");
     if (cursor >= size) return 0;
 
+    usable = adjust;
+    if (sampling > 1)
+        usable = hc_metrics_align (reference, sampling, adjust, count);
     cursor += echttp_reduce_json (buffer+cursor, size-cursor,
-                                  "adjust", adjust, METRICS_STATUS_DEPTH, "");
+                                  "adjust", usable, count, "");
     if (cursor >= size) return 0;
     if (cursor <= start) return 0; // No data to report.
 
@@ -171,6 +203,7 @@ int hc_metrics_status (char *buffer, int size, const char *host, time_t now) {
     cursor += snprintf (buffer+cursor, size-cursor, "}}}");
     if (cursor >= size) return 0;
 
+TRACE ("hc_metrics_status: done\n");
     return cursor;
 }
 
