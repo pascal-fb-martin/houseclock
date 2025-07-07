@@ -208,15 +208,19 @@ static void hc_clock_adjust (time_t drift) {
 }
 
 // Cleanup outdated metrics. It would be bad to increment these forever.
+// This resets metrics that were skipped due to the synchronization period,
+// plus the metrics for the current second, when it is a "new" time slot.
 //
-static void hc_clock_cleanup_adjust (time_t now) {
+static void hc_clock_cleanup_metrics (time_t now) {
 
     static time_t lastCleanup = 0;
     if (!lastCleanup) lastCleanup = now; // First call.
 
     while (lastCleanup < now) {
         lastCleanup += 1;
-        hc_clock_metrics_db[lastCleanup%HC_CLOCK_METRICS_DEPTH].adjust = 0;
+        int index = lastCleanup % HC_CLOCK_METRICS_DEPTH;
+        hc_clock_metrics_db[index].adjust = 0;
+        hc_clock_metrics_db[index].drift = 0;
     }
 }
 
@@ -231,7 +235,7 @@ void hc_clock_synchronize(const struct timeval *source,
     if (hc_clock_status_db == 0) return;
 
     time_t now = time(0);
-    hc_clock_cleanup_adjust (now);
+    hc_clock_cleanup_metrics (now);
 
     time_t previous_call = LatestCall;
     LatestCall = now;

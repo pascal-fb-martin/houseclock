@@ -658,6 +658,7 @@ void hc_http (int argc, const char **argv) {
         houseportal_declare (echttp_port(4), path, 1);
     }
     houselog_initialize ("ntp", argc, argv);
+    hc_metrics_initialize (argc, argv);
 
     echttp_cors_allow_method("GET");
     echttp_protect (0, hc_protect);

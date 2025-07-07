@@ -54,6 +54,12 @@ static hc_clock_status *clock_db = 0;
 static hc_clock_metrics *clock_metrics_db = 0;
 static int clock_metrics_count;
 
+static time_t StartupTime = 0;
+
+#define TRACE DEBUG printf
+
+#define METRICS_STATUS_DEPTH 300
+
 static void *hc_metrics_attach (const char *name) {
     void *p = hc_db_get (name);
     if (p == 0) {
@@ -90,70 +96,74 @@ static int hc_metrics_attach_clock (void) {
 }
 
 void hc_metrics_initialize (int argc, const char **argv) {
+    StartupTime = time(0);
 }
 
-static int hc_metrics_aggregate (time_t cursor, time_t end,
-                                 long long *offset, long long *adjust) {
+// The raw clock metrics are sparse (index of 1 second vs. variable sampling
+// rate) and need to be aggregated into a compact form.
+//
+static void hc_metrics_aggregate (time_t since, time_t cursor,
+                                  long long *offset, long long *adjust) {
 
     // Collect the data for the specified period.
     // The data must be aggregated on the basis of the sampling rate,
     // which varies depending on the time source (GPS of another NTP server).
     //
     int sampling = clock_db->sampling;
-    if (sampling <= 0) return 0;
 
-    int count = 0;
     int subcount = 0;
     int offset_accumulator = 0;
     int adjust_accumulator = 0;
-    while (cursor < end) {
-        int index = (int) (cursor % clock_metrics_count);
-        offset_accumulator += abs(clock_metrics_db[index].drift);
-        adjust_accumulator += clock_metrics_db[index].adjust;
-        cursor += 1;
+    int destination = (int) ((cursor / sampling) % METRICS_STATUS_DEPTH);
+    while (cursor > since) {
+        int source = (int) (cursor % clock_metrics_count);
+        offset_accumulator += abs(clock_metrics_db[source].drift);
+        adjust_accumulator += clock_metrics_db[source].adjust;
+        cursor -= 1;
         if (++subcount >= sampling) {
-            offset[count] = offset_accumulator;
-            adjust[count] = adjust_accumulator;
-            count += 1;
+TRACE ("hc_metrics_aggregate: accumulated offset = %d, adjust = %d at source index %d, destination %d\n", offset_accumulator, adjust_accumulator, source, destination);
+            offset[destination] = offset_accumulator;
+            adjust[destination] = adjust_accumulator;
             subcount = offset_accumulator = adjust_accumulator = 0;
+            destination = (int) ((cursor / sampling) % METRICS_STATUS_DEPTH);
         }
     }
     if (subcount > 0) {
-        offset[count] = offset_accumulator;
-        adjust[count] = adjust_accumulator;
-        count += 1; // Include last item.
+        offset[destination] = offset_accumulator;
+        adjust[destination] = adjust_accumulator;
     }
-    return count;
 }
 
 int hc_metrics_status (char *buffer, int size, const char *host, time_t now) {
 
     if (! hc_metrics_attach_clock()) return 0;
+    if (clock_db->sampling <= 0) return 0;
 
     time_t reference = now - 1; // Avoid the current second: still counting.
-    reference -= (reference % 300); // Aligned on a 5 minutes period.
+    reference -= (reference % METRICS_STATUS_DEPTH); // Aligned.
+    time_t origin = reference - METRICS_STATUS_DEPTH;
+    if (origin < StartupTime) return 0; // Too early.
 
     int cursor;
     cursor = snprintf (buffer, size,
-                       "{\"host\":\"%s\","
-                            "\"timestamp\":%lld,\"metrics\":{\"period\":300"
-                            ",\"sampling\":%d,\"clock\":",
-                       host, clock_db->sampling, (long long)reference);
+                       "{\"host\":\"%s\",\"timestamp\":%lld,\"metrics\":{"
+                            "\"period\":%d,\"sampling\":%d,\"clock\":",
+                       host, (long long)reference,
+                       METRICS_STATUS_DEPTH, clock_db->sampling);
     int start = cursor;
 
-    long long offset[300];
-    long long adjust[300];
-    int count = hc_metrics_aggregate (reference - 300, reference, offset, adjust);
-    if (count <= 0) return 0; // No data to report.
+    long long offset[METRICS_STATUS_DEPTH];
+    long long adjust[METRICS_STATUS_DEPTH];
+    hc_metrics_aggregate (origin, reference, offset, adjust);
 
-    // Now that we have our final metrics for that 5 minutes period, lets
-    // reduce it and report.
+    // Now that the final metrics for the reporting period are ready,
+    // lets reduce and report.
     cursor += echttp_reduce_json (buffer+cursor, size-cursor,
-                                  "offset", offset, count, "ms");
+                                  "offset", offset, METRICS_STATUS_DEPTH, "ms");
     if (cursor >= size) return 0;
 
     cursor += echttp_reduce_json (buffer+cursor, size-cursor,
-                                  "adjust", adjust, count, "");
+                                  "adjust", adjust, METRICS_STATUS_DEPTH, "");
     if (cursor >= size) return 0;
     if (cursor <= start) return 0; // No data to report.
 
@@ -167,47 +177,67 @@ int hc_metrics_status (char *buffer, int size, const char *host, time_t now) {
 int hc_metrics_details (char *buffer, int size,
                         const char *host, time_t now, time_t since) {
 
+TRACE ("hc_metrics_details: request now = %lld, since = %lld (start = %lld)\n", (long long)now, (long long)since, (long long)StartupTime);
     if (! hc_metrics_attach_clock()) return 0;
 
     int sampling = clock_db->sampling;
+    if (sampling <= 0) return 0;
+
     time_t reference = now - 1; // Avoid the current second: still counting.
     reference -= (reference % sampling); // Aligned on the sampling period.
+TRACE ("hc_metrics_details: reference = %lld (index %d)\n", (long long)reference, (int) (reference % clock_metrics_count));
+    time_t origin = reference - METRICS_STATUS_DEPTH;
 
-    if (since < reference - 300) since = reference - 300;
+    // Never collect more than available.
+    //
+    if (since < origin) since = origin;
+    if (since < StartupTime) since = StartupTime;
+
+TRACE ("hc_metrics_details: since = %lld (index %d)\n", (long long)since, (int) (since % clock_metrics_count));
+    if (since >= reference) return 0; // Final consistency check.
 
     int cursor;
     cursor = snprintf (buffer, size,
-                       "{\"host\":\"%s\","
-                            "\"timestamp\":%lld,\"Metrics\":{\"period\":300"
-                            ",\"sampling\":%d,\"clock\":",
-                       host, sampling, (long long)reference);
+                       "{\"host\":\"%s\",\"timestamp\":%lld,\"Metrics\":{"
+                            "\"period\":%d,\"sampling\":%d,\"clock\":",
+                       host, (long long)reference,
+                       METRICS_STATUS_DEPTH, sampling);
     int start = cursor;
 
-    time_t timestamp[300];
-    long long offset[300];
-    long long adjust[300];
-    int count = hc_metrics_aggregate (since, reference, offset, adjust);
-    if (count <= 0) return 0; // No data to report.
+    // Always aggregate the whole period, even if asked for less.
+    // The JSON generation will skip the values that are too old.
+    time_t timestamp[METRICS_STATUS_DEPTH];
+    long long offset[METRICS_STATUS_DEPTH];
+    long long adjust[METRICS_STATUS_DEPTH];
+    hc_metrics_aggregate (origin, reference, offset, adjust);
 
-    int i;
-    for (i = 0; i < count; ++i) timestamp[i] = since + i;
+    int index;
+    time_t value;
+    memset (timestamp, 0, sizeof(timestamp));
+    for (value = reference; value > origin; value -= sampling) {
+        index = (value / sampling) % METRICS_STATUS_DEPTH;
+        timestamp[index] = value;
+    }
 
-    // Now that we have our final metrics for that 5 minutes period, lets
-    // reduce it and report.
+    // Now that the final metrics for that reporting period are ready,
+    // lets reduce and report.
     cursor += echttp_reduce_details_json (buffer+cursor, size-cursor, since,
                                           "offset", "ms", reference,
-                                          sampling, count, timestamp, offset);
+                                          sampling, METRICS_STATUS_DEPTH,
+                                          timestamp, offset);
     if (cursor >= size) return 0;
 
     cursor += echttp_reduce_details_json (buffer+cursor, size-cursor, since,
                                           "adjust", "", reference,
-                                          sampling, count, timestamp, adjust);
+                                          sampling, METRICS_STATUS_DEPTH,
+                                          timestamp, adjust);
     if (cursor >= size) return 0;
     if (cursor <= start) return 0; // No data to report.
 
     buffer[start] = '{';
     cursor += snprintf (buffer+cursor, size-cursor, "}}}");
     if (cursor >= size) return 0;
+TRACE ("hc_metrics_details: result = %s\n", buffer);
 
     return cursor;
 }
