@@ -63,6 +63,8 @@ static int clock_metrics_count;
 
 static char hc_hostname[256] = {0};
 
+static int HouseMetricsStoreEnabled = 1;
+
 static char JsonBuffer[65536];
 
 static void *hc_http_attach (const char *name) {
@@ -599,7 +601,8 @@ static void hc_background (int fd, int mode) {
     }
 
     static time_t NextMetricsStore = 0;
-    if (hc_http_attach_metrics() && (now >= NextMetricsStore)) {
+    if (HouseMetricsStoreEnabled &&
+        hc_http_attach_metrics() && (now >= NextMetricsStore)) {
         if (!NextMetricsStore) {
             NextMetricsStore = now - (now % 300) + 305;
         } else {
@@ -657,6 +660,13 @@ void hc_http (int argc, const char **argv) {
         houseportal_initialize (argc, argv);
         houseportal_declare (echttp_port(4), path, 1);
     }
+
+    int i;
+    for (i = 1; i < argc; ++i) {
+        if (echttp_option_present("-metrics-no-store", argv[i]))
+            HouseMetricsStoreEnabled = 0;
+    }
+
     houselog_initialize ("ntp", argc, argv);
     hc_metrics_initialize (argc, argv);
 
