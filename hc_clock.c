@@ -245,21 +245,31 @@ void hc_clock_synchronize(const struct timeval *source,
         // is rounded to the closest integer. That gives the sampling rate for
         // the metrics recorded in this function.
         //
-        int period = (int) (now - previous_call);
-        if (CallPeriod >= 200) {
-            // avoid calculation overflow and lingering effect when the
+        // In order to limit the losses that come with integer divisions,
+        // the code increments the count by 10 (instead of 1) and multiply
+        // the accumulated period by 100, and finally round the average
+        // result according to the low order digit left (which is then
+        // eliminated).
+        //
+        // In other words, the code takes care to always keep a one digit
+        // fraction to maintain some precision and allow for the final
+        // rounding.
+        //
+        int period = (int) (now - previous_call) * 100;
+        if (CallPeriod >= 20000) {
+            // Avoid calculation overflow and lingering effect when the
             // synchronization period changes. Note that a limit of 200
-            // means that we readjust every 100 seconds, since the adjustment
-            // reset to 100 (not 0).
+            // seconds means that we readjust every 100 seconds, since
+            // the adjustment resets to 100 seconds (not 0).
             CallCount /= 2;
             CallPeriod /= 2;
         }
-        CallPeriod += (int) (now - previous_call);
-        CallCount += 1;
-        int average = (CallPeriod * 100) / CallCount;
-        if (average < 100) average = 1; // Don't get 0.
-        else if (average % 100 >= 50) average = (average / 100) + 1;
-        else average = (average / 100);
+        CallPeriod += period;
+        CallCount += 10;
+        int average = CallPeriod / CallCount;
+        if (average < 10) average = 1; // Don't get 0.
+        else if (average % 10 >= 5) average = (average / 10) + 1;
+        else average = (average / 10);
         hc_clock_status_db->sampling = average;
     }
 
