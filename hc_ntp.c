@@ -49,7 +49,6 @@
 #include "hc_clock.h"
 #include "hc_broadcast.h"
 
-#define NTP_VERSION 3
 #define NTP_UNIX_EPOCH 2208988800ull
 
 
@@ -86,6 +85,22 @@ typedef struct
     ntpTimestamp transmit;
 
 } ntpHeaderV3;
+
+// The template for all requests (the first fields never change):
+//
+ntpHeaderV3 ntpRequest = {
+    0x23, // li=0, vn=4, mode=3.
+    0,    // A client has no stratum of its own.
+    10,   // default poll interval recommended in rfc 5905.
+    -10,  // don't expect anything better than a millisecond accuracy.
+    0,
+    {0,0},
+    "   ",
+    {0, 0}, // reference.
+    {0, 0}, // origin (same as request)
+    {0, 0}, // receive.
+    {0, 0}  // transmit.
+};
 
 // The template for all responses (the first fields never change):
 //
@@ -124,17 +139,42 @@ static hc_ntp_status *hc_ntp_status_db = 0;
 static int hc_ntp_period;
 static int hc_ntp_client_cursor = 0;
 
+static const char *ReferenceNtpServerName = 0;
+static struct sockaddr_in ReferenceNtpServer = {0};
 
 const char *hc_ntp_help (int level) {
 
     static const char *ntpHelp[] = {
-        " [-ntp-service=NAME] [-ntp-period=INT]",
+        " [-ntp-service=NAME] [-ntp-period=INT] [-ntp-reference=NAME]",
         "-ntp-service=NAME:   name or port for the NTP socket",
         "-ntp-period=INT:     how often the NTP server advertises itself",
+        "-ntp-reference=NAME: external reference NTP server, for calibration only",
         NULL
     };
 
     return ntpHelp[level];
+}
+
+static void hc_ntp_resolve (const char *name) {
+
+    struct addrinfo hints = {0};
+    struct addrinfo *resolved;
+
+    hints.ai_flags = AI_ADDRCONFIG;
+    hints.ai_family = AF_INET;
+    hints.ai_socktype = SOCK_DGRAM;
+
+    int status = getaddrinfo (name, "ntp", &hints, &resolved);
+    if (status) {
+        fprintf (stderr, "[%s %d] cannot resolve %s: %s\n",
+                 __FILE__, __LINE__, name, strerror(status));
+        return; // Failed.
+    }
+
+    if (resolved->ai_addrlen <= sizeof(ReferenceNtpServer)) {
+        memcpy (&ReferenceNtpServer, resolved->ai_addr, resolved->ai_addrlen);
+    }
+    freeaddrinfo (resolved);
 }
 
 int hc_ntp_initialize (int argc, const char **argv) {
@@ -146,7 +186,10 @@ int hc_ntp_initialize (int argc, const char **argv) {
     for (i = 1; i < argc; ++i) {
         echttp_option_match ("-ntp-service=", argv[i], &ntpservice);
         echttp_option_match ("-ntp-period=", argv[i], &ntpperiod);
+        echttp_option_match ("-ntp-reference=", argv[i], &ReferenceNtpServerName);
     }
+    if (ReferenceNtpServerName) hc_ntp_resolve (ReferenceNtpServerName);
+
     if (strcmp(ntpservice, "none") == 0) {
         return 0; // Do not act as a NTP server.
     }
@@ -176,8 +219,6 @@ int hc_ntp_initialize (int argc, const char **argv) {
     hc_ntp_status_db->source = -1;
     hc_ntp_status_db->mode = 'I';
     hc_ntp_status_db->stratum = 0;
-
-    if (hc_test_mode()) return -1;
 
     return hc_broadcast_open (ntpservice);
 }
@@ -353,9 +394,50 @@ static void hc_ntp_broadcastmsg (const ntpHeaderV3 *head,
     }
 }
 
-static void hc_ntp_requestmsg (const ntpHeaderV3 *head,
-                               const struct sockaddr_in *source,
-                               const struct timeval *receive) {
+static void hc_ntp_request (void) {
+
+    if (!ReferenceNtpServer.sin_family) return; // No address available.
+
+    struct timeval transmit;
+    gettimeofday (&transmit, NULL);
+    hc_ntp_set_timestamp (&ntpRequest.transmit, &transmit);
+    hc_broadcast_reply
+        ((char *)(&ntpRequest), sizeof(ntpRequest), &ReferenceNtpServer);
+}
+
+static long long hc_ntp_interval (const struct timeval *t0,
+                                  const struct timeval *t1) {
+   return ((long long)(t1->tv_sec - t0->tv_sec) * 1000)
+              + ((t1->tv_usec - t0->tv_usec) / 1000);
+}
+
+static void hc_ntp_responsemsg (const ntpHeaderV3 *head,
+                                const struct sockaddr_in *source,
+                                const struct timeval *receive) {
+
+    struct timeval origin;
+    struct timeval svrtransmit;
+    struct timeval svrreceive;
+    hc_ntp_get_timestamp (&origin, &(head->origin));
+    hc_ntp_get_timestamp (&svrreceive, &(head->receive));
+    hc_ntp_get_timestamp (&svrtransmit, &(head->transmit));
+
+    long long offset = hc_ntp_interval (&origin, &svrreceive) -
+                       hc_ntp_interval (&svrtransmit, receive);
+    offset /= 2;
+
+    if (hc_test_mode()) {
+        long long latency = hc_ntp_interval (&origin, receive);
+        printf ("%lld ms offset with time server %s (%s), response latency %lld ms\n",
+                offset, ReferenceNtpServerName, inet_ntoa (source->sin_addr), latency);
+    }
+    // FUTURE: use the computed offset (or an average) to adjust the GPS
+    // offset as a mean for automatic calibration.
+}
+
+static void hc_ntp_respond (const ntpHeaderV3 *head,
+                            const struct sockaddr_in *source,
+                            const struct timeval *receive) {
 
     // Build the response using the local system clock, if it has been
     // synchronized with GPS or remote broadcast server.
@@ -439,11 +521,13 @@ void hc_ntp_process (const struct timeval *receive) {
                     hc_ntp_broadcastmsg (head, &source, receive);
                 }
                 break;
-            case 4: break; // Server response.
+            case 4: // Server response (used in test mode).
+                hc_ntp_responsemsg (head, &source, receive);
+                break;
             case 3: // Client request.
                 if ((hc_ntp_status_db->stratum > 0)
                         && hc_clock_synchronized()) {
-                    hc_ntp_requestmsg (head, &source, receive);
+                    hc_ntp_respond (head, &source, receive);
                 }
                 break;
             default:
@@ -460,6 +544,7 @@ void hc_ntp_periodic (const struct timeval *wakeup) {
 
     static time_t latestPeriod = 0;
     static time_t latestBroadcast = 0;
+    static time_t latestRequest = 0;
 
     if (latestPeriod == 0) {
         latestPeriod = wakeup->tv_sec / 10;
@@ -474,6 +559,12 @@ void hc_ntp_periodic (const struct timeval *wakeup) {
         hc_ntp_status_db->live.broadcast = 0;
         latestPeriod += 1;
     }
+
+    if (wakeup->tv_sec >= latestRequest + 10) {
+        hc_ntp_request ();
+        latestRequest = wakeup->tv_sec;
+    }
+    if (hc_test_mode()) return;
 
     if (hc_nmea_active()) {
         if (hc_clock_synchronized() &&

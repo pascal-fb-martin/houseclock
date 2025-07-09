@@ -189,6 +189,7 @@ void hc_broadcast_enumerate (void) {
 
 int hc_broadcast_open (const char *service) {
 
+    int portok = 0;
     int value;
 
     // Open the UDP server socket for receiving NTP requests and sending
@@ -199,14 +200,16 @@ int hc_broadcast_open (const char *service) {
     if (entry == NULL) {
         if (isdigit (service[0])) {
            serverport = atoi(service);
+           portok = 1;
         }
     } else {
         serverport = ntohs(entry->s_port);
+        portok = 1;
     }
 
     endservent();
 
-    if (serverport <= 0) {
+    if (!portok) {
         fprintf (stderr, "[%s %d] invalid service name %s\n",
                  __FILE__, __LINE__, service);
         exit (1);

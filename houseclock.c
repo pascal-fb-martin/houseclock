@@ -106,6 +106,7 @@ int main (int argc, const char **argv) {
     int maxfd = 1;
     int count;
     int ntpsocket;
+    pid_t httpid;
 
     int gpstty = -1;
 
@@ -132,18 +133,20 @@ int main (int argc, const char **argv) {
         if (echttp_option_present ("-debug", argv[i])) HcDebug = 1;
         if (echttp_option_present ("-test", argv[i])) HcTest = 1;
     }
-
-    // Start the web interface.
     hc_db_create (atoi(dbsizestr)*1024*1024);
-    pid_t httpid = fork();
-    if (httpid == 0) {
-        nice (19); // The HTTP server is low priority.
-        hc_http (argc, argv);
-    }
-    if (httpid < 0) {
-        fprintf (stderr, "[%s %d] Cannot fork: %s\n",
-                 __FILE__, __LINE__, strerror (errno));
-        exit (1);
+
+    // Start the web interface (except in test mode).
+    if (!HcTest) {
+        httpid = fork();
+        if (httpid == 0) {
+            nice (19); // The HTTP server is low priority.
+            hc_http (argc, argv);
+        }
+        if (httpid < 0) {
+            fprintf (stderr, "[%s %d] Cannot fork: %s\n",
+                     __FILE__, __LINE__, strerror (errno));
+            exit (1);
+        }
     }
 
     nice (-20); // The NTP server is high priority.
@@ -207,11 +210,13 @@ int main (int argc, const char **argv) {
             }
             last_period = now.tv_sec;
 
-            int wstatus;
-            if (waitpid (httpid, &wstatus, WNOHANG) == httpid) {
-                fprintf (stderr, "[%s %d] the HTTP server died, exit now\n",
-                         __FILE__, __LINE__);
-                exit(1);
+            if (!HcTest) {
+                int wstatus;
+                if (waitpid (httpid, &wstatus, WNOHANG) == httpid) {
+                    fprintf (stderr, "[%s %d] the HTTP server died, exit now\n",
+                             __FILE__, __LINE__);
+                    exit(1);
+                }
             }
         }
     }

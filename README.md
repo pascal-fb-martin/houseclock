@@ -61,15 +61,16 @@ This installs HouseClock as a service (for Debian's systemd) and starts it. If n
 
 ## Configuration
 
-With default options, HouseClock will read from the GPS device at /dev/ttyACM0, listen for HTTP requests on a dynamic tcp port number and handle NTP communication on the ntp udp port (123).
+With default options, HouseClock will read from the GPS device at /dev/ttyACM0, apply a GPS receiver latency of 70ms, listen for HTTP requests on a dynamic tcp port number and handle NTP communication on the ntp udp port (123).
 
 All these default can be changed through command line options. For example, if the GPS device is different, [HousePortal](https://github.com/pascal-fb-martin/houseportal) was not installed and the http port is already in use (httpd is running), one can force other values using the -http-service and -gps options:
 ```
 houseclock -http-service=8080 -gps=/dev/tty0
 ```
-If HousePortal has been installed, you can use the -http-service=dynamic command line option to use a dynamic port number and register a redirection with HousePortal. HouseClock does not currently sign its redirect message to HousePortal. The benefit of using HousePortal is that all your local http applications will share access through port 80, without having to manually assign port numbers. For example "http://machine/ntp/status" will be redirected to "http://machine:N/ntp/status" (where N is the current HouseClock HTTP port).
 
-For more information about available options, a complete help is available:
+If HousePortal has been installed, you can let HouseClock use a dynamic port number that it will register with HousePortal. (Note that HouseClock does not currently sign its redirect message to HousePortal.) The benefit of using HousePortal is that all your local http applications will share access through port 80, without having to manually assign port numbers. For example "http://machine/ntp/status" will be redirected to "http://machine:N/ntp/status" (where N is the current HouseClock HTTP port).
+
+For more information about the supported options, a complete help is available:
 ```
 houseclock -h
 ````
@@ -87,4 +88,19 @@ GPS_OPTS="-gps=/dev/tty0"
 NTP_OPTS="-ntp-period=30"
 HTTP_OPTS="-http-service=8080"
 ```
+
+## Calibration
+
+It is possible to verify the accuracy of the time synchronization after installation by running the houseclock program in the foreground with test mode enabled and a reference NTP server. For example:
+```
+houseclock -test -ntp-service=0 -ntp-reference=3.debian.pool.ntp.org
+```
+
+(The `-ntp-service=0` option is used to avoid a port conflict with the running houseclock service.)
+
+The program then prints the estimated offset of the local time compared to the NTP server time: positive if the local time is less than the NTP server time, negative if it is greater.
+
+Please do not run houseclock in such a calibration mode for long periods, as this generates a significant rate of requests to the NTP server.
+
+If the offset shown oscillates around a stable value that is outside of the interval [-10ms, 10ms], one can add this offset's average to the GPS receiver latency using the `-latency` option. For example if the average offset with the reference NTP server is 30ms and the default latency of 70ms was used, the time discrepancy can be corrected by adding the option `-latency=100` when launching the HouseClock service. (The sign of the offset matters: if the average offset was -30ms, the GPS latency to use would be 40.)
 
