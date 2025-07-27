@@ -1,4 +1,4 @@
-# HouseClock - A GPS Simple Network Time Server with Web console
+# HouseClock - A Simple Network Time Server with GPS synchronization and Web console
 
 ## Overview
 
@@ -29,6 +29,7 @@ To further minimise timing errors, this software detects the beginning of each G
 The delta between the OS time and the GPS time is still subject to some unpredictable variations due to OS scheduling, network and clock interrupts, or the GPS device internal timing. In order to avoid readjusting the clock continuously due to these, an average drift is calculated over a 10 seconds period when the time source is a GPS device.
 
 Tests show random variations that remain within a -20ms to 20ms range. The test was conducted in the following conditions:
+
 - VK-162 USB GPS Navigation Module (bought for less than $15).
 - Raspberry Pi 4, overall sustained CPU usage of around 20% (running motion).
 - Two Ethernet interfaces (one receiving four VGA video streams continuously).
@@ -73,7 +74,7 @@ If HousePortal has been installed, you can let HouseClock use a dynamic port num
 For more information about the supported options, a complete help is available:
 ```
 houseclock -h
-````
+```
 
 The service options can be configured by creating file /etc/default/houseclock and set the following shell variables:
 
