@@ -36,7 +36,8 @@ Tests show random variations that remain within a -20ms to 20ms range. The test 
 
 During that test, the Raspberry Pi clock experienced an averag drift of about 2ms to 4ms every 10 seconds, resulting into a cycle of adjustment every minute or so (adjust the clock down for about 30s, then let the clock drift for another 30s).
 
-Caution: if another time synchronization service is running, then the time delta may sometimes jump in the -50ms to 50ms range. To avoid this, the make install target detects and disables systemd-timesyncd, chrony and ntpd.
+> [!Caution]
+> if another time synchronization service is running, then the time delta may sometimes jump in the -50ms to 50ms range. To avoid this, the make install target detects and disables systemd-timesyncd, chrony and ntpd.
 
 ## Server Mode
 
