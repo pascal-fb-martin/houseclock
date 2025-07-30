@@ -1,6 +1,6 @@
 # houseclock - A simple GPS Time Server with Web console
 #
-# Copyright 2023, Pascal Martin
+# Copyright 2025, Pascal Martin
 #
 # This program is free software; you can redistribute it and/or
 # modify it under the terms of the GNU General Public License
@@ -16,10 +16,17 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor,
 # Boston, MA  02110-1301, USA.
+#
+# WARNING
+#
+# This Makefile depends on echttp and houseportal (dev) being installed.
+
+prefix=/usr/local
+SHARE=$(prefix)/share/house
+
+INSTALL=/usr/bin/install
 
 HAPP=houseclock
-HROOT=/usr/local
-SHARE=$(HROOT)/share/house
 
 # Application build. --------------------------------------------
 
@@ -56,32 +63,28 @@ package:
 
 # Distribution agnostic file installation -----------------------
 
-install-ui:
-	mkdir -p $(SHARE)/public/ntp
-	cp public/* $(SHARE)/public/ntp
-	chmod 644 $(SHARE)/public/ntp/*
-	chmod 755 $(SHARE) $(SHARE)/public $(SHARE)/public/ntp
+install-ui: install-preamble
+	$(INSTALL) -m 0755 -d $(DESTDIR)$(SHARE)/public/ntp
+	$(INSTALL) -m 0644 public/* $(DESTDIR)$(SHARE)/public/ntp
 
 install-app: install-ui
-	mkdir -p $(HROOT)/bin
-	rm -f $(HROOT)/bin/houseclock
-	cp houseclock $(HROOT)/bin
-	chown root:root $(HROOT)/bin/houseclock
-	chmod 755 $(HROOT)/bin/houseclock
+	$(INSTALL) -m 0755 -s houseclock $(DESTDIR)$(prefix)/bin
+	touch $(DESTDIR)/etc/default/houseclock
 
 uninstall-app:
-	rm -rf $(SHARE)/public/ntp
-	rm -f $(HROOT)/bin/houseclock 
+	rm -rf $(DESTDIR)$(SHARE)/public/ntp
+	rm -f $(DESTDIR)$(prefix)/bin/houseclock
 
 purge-app:
 
 purge-config:
+	rm -f $(DESTDIR)/etc/default/houseclock
 
 # Systemd specific: cleanup of other NTP servers.
 
 clean-systemd::
-	if [ -e /etc/init.d/ntp ] ; then systemctl stop ntp ; systemctl disable ntp ; fi
-	if [ -e /etc/init.d/chrony ] ; then systemctl stop chrony ; systemctl disable chrony ; fi
+	if [ "x$(DESTDIR)" = "x" ] ; then if [ -e /etc/init.d/ntp ] ; then systemctl stop ntp ; systemctl disable ntp ; fi ; fi
+	if [ "x$(DESTDIR)" = "x" ] ; then if [ -e /etc/init.d/chrony ] ; then systemctl stop chrony ; systemctl disable chrony ; fi ; fi
 
 # System installation. ------------------------------------------
 
