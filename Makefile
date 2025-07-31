@@ -53,7 +53,7 @@ rebuild: clean all
 	gcc -c -Os -o $@ $<
 
 houseclock: $(OBJS)
-	gcc -Os -o houseclock $(OBJS) -lhouseportal -lechttp -lssl -lcrypto -lrt
+	gcc -Os -o houseclock $(OBJS) -lhouseportal -lechttp -lssl -lcrypto -lmagic -lrt
 
 # Minimal tar file for installation -------------------------------
 
