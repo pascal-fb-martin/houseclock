@@ -1,0 +1,10 @@
+#!/bin/sh
+
+HAPP=houseclock
+
+case $1 in
+    remove|purge)
+        if [ -e /lib/systemd/system/${HAPP}.service ] ; then systemctl stop ${HAPP} ; systemctl disable ${HAPP} ; fi
+        ;;
+esac
+

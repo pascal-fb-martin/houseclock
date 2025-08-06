@@ -1,0 +1,17 @@
+#!/bin/sh
+
+prefix=/usr/local
+SHARE=$prefix/share/house
+
+HAPP=houseclock
+
+case $1 in
+    remove)
+        systemctl daemon-reload
+        ;;
+    purge)
+        systemctl daemon-reload
+        rm -f /etc/default/$HAPP
+        ;;
+esac
+

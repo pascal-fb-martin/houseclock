@@ -1,0 +1,6 @@
+houselinux (2.5) UNREALEASED; urgency=low
+
+   * Initial release as a Debian package.
+
+ -- Pascal Martin <pascal.fb.martin@gmail.com>  Wed, 5 Aug 2025 17:40:19 PDT
+

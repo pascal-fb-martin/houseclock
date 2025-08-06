@@ -50,3 +50,9 @@ modules.order
 Module.symvers
 Mkfile.old
 dkms.conf
+
+# House naming conventions
+build
+donotcommit
+houseclock
+

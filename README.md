@@ -106,3 +106,20 @@ Please do not run houseclock in such a calibration mode for long periods, as thi
 
 If the offset shown oscillates around a stable value that is outside of the interval [-10ms, 10ms], one can add this offset's average to the GPS receiver latency using the `-latency` option. For example if the average offset with the reference NTP server is 30ms and the default latency of 70ms was used, the time discrepancy can be corrected by adding the option `-latency=100` when launching the HouseClock service. (The sign of the offset matters: if the average offset was -30ms, the GPS latency to use would be 40.)
 
+## Debian Packaging
+
+The provided Makefile supports building private Debian packages. These are _not_ official
+ packages:
+
+- They do not follow all Debian policies.
+
+- They are not built using Debian standard conventions and tools.
+
+- The packaging is not separate from the upstream sources, and there is
+  no source package.
+
+To build a Debian package, use the `debian-package` target:
+```
+make debian-package
+```
+

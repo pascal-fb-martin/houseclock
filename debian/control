@@ -1,0 +1,22 @@
+Source: houseclock
+Version: 2.5
+Section: Web servers
+Maintainer: Pascal Martin <pascal.fb.martin@gmail.com>
+Priority: optional
+Homepage: https://github.com/pascal-fb-martin/houselinux
+Standard-Version: 4.7.0
+Package: houseclock
+Architecture: {{arch}}
+Depends: 
+Description: A House service to synchronize the system time
+ HouseClock is part of the House suite of web services.
+ .
+ When HouseClock detects an USB GPS device, it synchronizes the system time
+ with the GPS time and then starts broadcasting NTP time messages as stratum 1.
+ Other HouseClock instances synchronize their local time based on these
+ broadcast. You can have more than one HouseClock instance with a GPS device.
+ .
+ Every HouseClock instance also responds to NTP time requests.
+ .
+ HouseClock provides a web UI to monitor time synchronization and NTP client
+ activity.
