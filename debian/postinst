@@ -6,8 +6,12 @@ case $1 in
     configure|abort-upgrade|abort-deconfigure|abort-remove)
         grep -q '^house:' /etc/passwd || useradd -r house -s /usr/sbin/nologin -d /var/lib/house
         systemctl daemon-reload
-        systemctl enable $HAPP
-        systemctl start $HAPP
+        if systemctl is-active --quiet $HAPP ; then
+            systemctl restart $HAPP
+        else
+            systemctl enable $HAPP
+            systemctl start $HAPP
+        fi
         ;;
 esac
 
