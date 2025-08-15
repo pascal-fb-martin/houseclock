@@ -27,6 +27,8 @@ SHARE=$(prefix)/share/house
 INSTALL=/usr/bin/install
 
 HAPP=houseclock
+HMAN=/var/lib/house/note/content/manuals/infrastructure
+HMANCACHE=/var/lib/house/note/cache
 
 # Application build. --------------------------------------------
 
@@ -66,6 +68,9 @@ package:
 install-ui: install-preamble
 	$(INSTALL) -m 0755 -d $(DESTDIR)$(SHARE)/public/ntp
 	$(INSTALL) -m 0644 public/* $(DESTDIR)$(SHARE)/public/ntp
+	$(INSTALL) -m 0755 -d $(DESTDIR)$(HMAN)
+	$(INSTALL) -m 0644 README.md $(DESTDIR)$(HMAN)/$(HAPP).md
+	rm -rf $(DESTDIR)$(HMANCACHE)/*
 
 install-runtime: install-preamble
 	$(INSTALL) -m 0755 -s houseclock $(DESTDIR)$(prefix)/bin
@@ -76,6 +81,8 @@ install-app: install-ui install-runtime
 uninstall-app:
 	rm -rf $(DESTDIR)$(SHARE)/public/ntp
 	rm -f $(DESTDIR)$(prefix)/bin/houseclock
+	rm -f $(DESTDIR)$(HMAN)/$(HAPP).md
+	rm -rf $(DESTDIR)$(HMANCACHE)/*
 
 purge-app:
 

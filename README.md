@@ -1,4 +1,6 @@
-# HouseClock - A Simple Network Time Server with GPS synchronization and Web console
+# HouseClock
+
+A Simple Network Time Server with GPS synchronization and Web console
 
 ## Overview
 
@@ -66,6 +68,7 @@ This installs HouseClock as a service (for Debian's systemd) and starts it. If n
 With default options, HouseClock will read from the GPS device at /dev/ttyACM0, apply a GPS receiver latency of 70ms, listen for HTTP requests on a dynamic tcp port number and handle NTP communication on the ntp udp port (123).
 
 All these default can be changed through command line options. For example, if the GPS device is different, [HousePortal](https://github.com/pascal-fb-martin/houseportal) was not installed and the http port is already in use (httpd is running), one can force other values using the -http-service and -gps options:
+
 ```
 houseclock -http-service=8080 -gps=/dev/tty0
 ```
@@ -73,6 +76,7 @@ houseclock -http-service=8080 -gps=/dev/tty0
 If HousePortal has been installed, you can let HouseClock use a dynamic port number that it will register with HousePortal. (Note that HouseClock does not currently sign its redirect message to HousePortal.) The benefit of using HousePortal is that all your local http applications will share access through port 80, without having to manually assign port numbers. For example "http://machine/ntp/status" will be redirected to "http://machine:N/ntp/status" (where N is the current HouseClock HTTP port).
 
 For more information about the supported options, a complete help is available:
+
 ```
 houseclock -h
 ```
@@ -85,6 +89,7 @@ The service options can be configured by creating file /etc/default/houseclock a
 * **OTHER_OPTS**: general purpose options.
 
 For example:
+
 ```
 GPS_OPTS="-gps=/dev/tty0"
 NTP_OPTS="-ntp-period=30"
@@ -94,6 +99,7 @@ HTTP_OPTS="-http-service=8080"
 ## Calibration
 
 It is possible to verify the accuracy of the time synchronization after installation by running the houseclock program in the foreground with test mode enabled and a reference NTP server. For example:
+
 ```
 houseclock -test -ntp-service=0 -ntp-reference=3.debian.pool.ntp.org
 ```
@@ -108,8 +114,7 @@ If the offset shown oscillates around a stable value that is outside of the inte
 
 ## Debian Packaging
 
-The provided Makefile supports building private Debian packages. These are _not_ official
- packages:
+The provided Makefile supports building private Debian packages. These are _not_ official packages:
 
 - They do not follow all Debian policies.
 
@@ -119,6 +124,7 @@ The provided Makefile supports building private Debian packages. These are _not_
   no source package.
 
 To build a Debian package, use the `debian-package` target:
+
 ```
 make debian-package
 ```

@@ -1,3 +1,9 @@
+houselinux (2.6) UNREALEASED; urgency=low
+
+   * Install README.md as an online manual.
+
+ -- Pascal Martin <pascal.fb.martin@gmail.com>  Wed, 15 Aug 2025 12:00:00 PDT
+
 houselinux (2.5) UNREALEASED; urgency=low
 
    * Initial release as a Debian package.
