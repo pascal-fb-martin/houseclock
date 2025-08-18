@@ -104,6 +104,7 @@ debian-package:
 	install -m 0755 debian/prerm build/$(HAPP)/DEBIAN
 	install -m 0755 debian/postrm build/$(HAPP)/DEBIAN
 	make DESTDIR=build/$(HAPP) install-package
+	cd build/$(HAPP) ; find etc -type f | sed 's/etc/\/etc/' > DEBIAN/conffiles
 	cd build ; fakeroot dpkg-deb -b $(HAPP) .
 
 # System installation. ------------------------------------------
