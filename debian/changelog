@@ -1,3 +1,9 @@
+houselinux (2.7) UNRELEASED; urgency=low
+
+   * NMEA capture.
+
+ -- Pascal Martin <pascal.fb.martin@gmail.com>  Thu, 30 Oct 2025 12:00:00 PDT
+
 houselinux (2.6) UNRELEASED; urgency=low
 
    * Install README.md as an online manual.

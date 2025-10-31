@@ -35,6 +35,9 @@ int  hc_nmea_active (void);
 #define HC_NMEA_DEPTH 32
 #define HC_NMEA_MAX_SENTENCE 81 // NMEA sentence is no more than 80 characters.
 
+#define GPSFLAGS_NEWFIX    1
+#define GPSFLAGS_NEWBURST  2
+
 typedef struct {
     char sentence[HC_NMEA_MAX_SENTENCE];
     char flags;
@@ -56,7 +59,8 @@ typedef struct {
     } text[HC_NMEA_TEXT_LINES];
     int textcount;
     gpsSentence history[HC_NMEA_DEPTH];
-    int gpscount;
+    int gpsproducer;
+    int gpsconsumer;
 } hc_nmea_status;
 
 void hc_nmea_convert (char *buffer, int size,

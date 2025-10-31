@@ -47,6 +47,7 @@
 #include "echttp_cors.h"
 #include "echttp_static.h"
 #include "houseportalclient.h"
+#include "housecapture.h"
 #include "houselog.h"
 #include "houselog_storage.h"
 
@@ -64,6 +65,8 @@ static int clock_metrics_count;
 static char hc_hostname[256] = {0};
 
 static int HouseMetricsStoreEnabled = 1;
+
+static int NMEACapture = -1;
 
 static char JsonBuffer[65536];
 
@@ -265,49 +268,6 @@ static const char *hc_http_status (const char *method, const char *uri,
     snprintf (cursor, size,
               "%s\"mem\":{\"space\":%d,\"used\":%d}}}",
               prefix, hc_db_get_space(), hc_db_get_used());
-
-    echttp_content_type_json();
-    return JsonBuffer;
-}
-
-static const char *hc_http_gps (const char *method, const char *uri,
-                                const char *data, int length) {
-    const char *prefix = "";
-    int i;
-    int has_sentence = 0;
-    char buffer[1024];
-
-    if (! hc_http_attach_nmea()) return "";
-
-    snprintf (JsonBuffer, sizeof(JsonBuffer), "{\"gps\":{\"fix\":%s",
-              nmea_db->fix ? "true" : "false");
-
-    if (nmea_db->textcount > 0) {
-        prefix = ",\"text\":[\"";
-        for (i = 0; i < nmea_db->textcount; ++i) {
-            strcat (JsonBuffer, prefix);
-            strcat (JsonBuffer, nmea_db->text[i].line);
-            prefix = "\",\"";
-        }
-        strcat (JsonBuffer, "\"]");
-    }
-    prefix = ",\"history\":[";
-
-    for (i = 0; i < HC_NMEA_DEPTH; ++i) {
-        gpsSentence *item = nmea_db->history + i;
-        if (item->timing.tv_sec == 0) continue;
-        snprintf (buffer, sizeof(buffer),
-                  "%s{\"sentence\":\"%s\",\"timestamp\":[%u,%d],\"flags\":%d}",
-                  prefix,
-                  item->sentence,
-                  item->timing.tv_sec, item->timing.tv_usec / 1000,
-                  item->flags);
-        strcat (JsonBuffer, buffer);
-        prefix = ",";
-        has_sentence = 1;
-    }
-    if (has_sentence) strcat (JsonBuffer, "]");
-    strcat (JsonBuffer, "}}");
 
     echttp_content_type_json();
     return JsonBuffer;
@@ -628,9 +588,33 @@ static void hc_background (int fd, int mode) {
                 GpsTimeLock = 0;
             }
         }
+
+        // Recover the captured NMEA data, if any.
+        // If the capture is not enabled for NMEA the data is lost.
+        // That is OK.
+        int cursor = nmea_db->gpsconsumer;
+        while (cursor != nmea_db->gpsproducer) {
+            if (housecapture_active (NMEACapture)) {
+                const char *action;
+                int flags = nmea_db->history[cursor].flags;
+                if (flags & GPSFLAGS_NEWFIX) action = "NEW TIME";
+                else if (flags & GPSFLAGS_NEWBURST) action = "START";
+                else action = "DATA";
+                housecapture_record_timed (&(nmea_db->timestamp),
+                                           NMEACapture,
+                                           nmea_db->gpsdevice,
+                                           action,
+                                           "%s",
+                                           nmea_db->history[cursor].sentence);
+            }
+            cursor += 1;
+            if (cursor >= HC_NMEA_DEPTH) cursor = 0;
+            nmea_db->gpsconsumer = cursor;
+        }
     }
     houseportal_background (now);
     houselog_background (now);
+    housecapture_background (now);
 }
 
 const char *hc_http_help (int level) {
@@ -669,6 +653,8 @@ void hc_http (int argc, const char **argv) {
 
     houselog_initialize ("ntp", argc, argv);
     hc_metrics_initialize (argc, argv);
+    housecapture_initialize ("/ntp", argc, argv);
+    NMEACapture = housecapture_register ("NMEA");
 
     echttp_cors_allow_method("GET");
     echttp_protect (0, hc_protect);
@@ -678,7 +664,6 @@ void hc_http (int argc, const char **argv) {
     echttp_route_uri ("/ntp/metrics", hc_http_metrics);
     echttp_route_uri ("/ntp/metrics/details", hc_http_details);
     echttp_route_uri ("/ntp/drift", hc_http_drift); // Old debug API.
-    echttp_route_uri ("/ntp/gps", hc_http_gps);
     echttp_route_uri ("/ntp/server", hc_http_ntp);
     echttp_static_route ("/", "/usr/local/share/house/public");
     echttp_background (&hc_background);

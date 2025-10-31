@@ -155,9 +155,6 @@ static int gpsLatency;
 static char gpsBuffer[2048]; // 2 seconds of NMEA data, even in worst case.
 static int  gpsCount = 0;    // How much NMEA data is stored.
 
-#define GPSFLAGS_NEWFIX    1
-#define GPSFLAGS_NEWBURST  2
-
 #define GPS_EXPIRES 5
 
 static const char *gpsDevice = "/dev/ttyACM0";
@@ -199,7 +196,6 @@ static void hc_nmea_reset (void) {
     hc_nmea_status_db->latitude[0] = 0;
     hc_nmea_status_db->longitude[0] = 0;
     hc_nmea_status_db->textcount = 0;
-    hc_nmea_status_db->gpscount = 0;
 
     if (gpsTty >= 0) close(gpsTty);
     gpsTty = -1;
@@ -238,6 +234,9 @@ void hc_nmea_initialize (int argc, const char **argv) {
 
     hc_nmea_reset();
     hc_nmea_listen ();
+
+    hc_nmea_status_db->gpsproducer = 0;
+    hc_nmea_status_db->gpsconsumer = 0;
 
     gpsInitialized = time(0);
 }
@@ -341,11 +340,8 @@ static int hc_nmea_valid (const char *status, const char *integrity) {
 static void hc_nmea_record (const char *sentence,
                             struct timeval *timing) {
 
-    gpsSentence *decoded;
-
-    if (++(hc_nmea_status_db->gpscount) >= HC_NMEA_DEPTH)
-        hc_nmea_status_db->gpscount = 0;
-    decoded = hc_nmea_status_db->history + hc_nmea_status_db->gpscount;
+    gpsSentence *decoded =
+        hc_nmea_status_db->history + hc_nmea_status_db->gpsproducer;
 
     strncpy (decoded->sentence, sentence, sizeof(decoded->sentence));
     decoded->timing = *timing;
@@ -353,8 +349,15 @@ static void hc_nmea_record (const char *sentence,
 }
 
 static void hc_nmea_mark (int flags, const struct timeval *timestamp) {
-    hc_nmea_status_db->history[hc_nmea_status_db->gpscount].flags = flags;
+
+    int cursor = hc_nmea_status_db->gpsproducer;
+    hc_nmea_status_db->history[cursor].flags = flags;
     hc_nmea_status_db->timestamp = *timestamp;
+
+    // Move the producer cursor forward, unless it hits the consumer cursor.
+    if (++cursor >= HC_NMEA_DEPTH) cursor = 0;
+    if (cursor != hc_nmea_status_db->gpsconsumer)
+        hc_nmea_status_db->gpsproducer = cursor;
 }
 
 static void hc_nmea_store_position (char **fields) {

@@ -2,14 +2,13 @@
 <html>
 <head>
 <link rel=stylesheet type="text/css" href="/house.css" title="House">
-<script src="/events.js"></script>
+<script src="/capture.js"></script>
 <script>
 window.onload = function() {
-   eventStart('/ntp');
+   captureStart('/ntp');
 }
 </script>
-<head>
-   <title></title>
+<title></title>
 </head>
 <body>
    <table class="housetopcontainer">
@@ -17,19 +16,19 @@ window.onload = function() {
    <table class="housetop">
    <tr>
    <td><a href="/ntp/index.html">Clock</a></td>
-   <td><span>Events</span></td>
-   <td><a href="/ntp/capture.html">Capture</a></td>
+   <td><a href="/ntp/events.html">Events</a></td>
+   <td><span>Capture</span></td>
    </tr>
    </table>
    </td></tr>
    </table>
-   <table class="housewidetable" id="eventlist" border="0">
+   <table class="housewidetable" id="capturelist" border="0">
       <tr>
          <th width="15%">TIME</th>
          <th width="10%">CATEGORY</th>
-         <th width="15%">NAME</th>
-         <th width="15%">ACTION</th>
-         <th width="45%">DESCRIPTION</th>
+         <th width="10%">NAME</th>
+         <th width="10%">ACTION</th>
+         <th width="55%">DATA</th>
       </tr>
    </table>
 </body>
