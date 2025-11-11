@@ -28,6 +28,7 @@
 #include <fcntl.h>
 #include <stdio.h>
 #include <string.h>
+#include <signal.h>
 #include <unistd.h>
 #include <errno.h>
 #include <sys/termios.h>
@@ -40,6 +41,11 @@ int hc_tty_set (int fd, int baud) {
     struct termios settings;
 
     if (! isatty(fd)) return 0; // No need to setup anything.
+
+    // When running as a service, this might become the controlling TTY.
+    // Since HouseClock is designed to survice GPS failure, it must ignore
+    // any TTY failure signal.
+    signal (SIGHUP, SIG_IGN);
 
     if (tcgetattr(fd,&settings) != 0) return errno;
 
