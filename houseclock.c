@@ -140,6 +140,7 @@ int main (int argc, const char **argv) {
         httpid = fork();
         if (httpid == 0) {
             nice (19); // The HTTP server is low priority.
+            signal (SIGHUP, SIG_IGN); // GPS may become the controlling TTY.
             hc_http (argc, argv);
         }
         if (httpid < 0) {
