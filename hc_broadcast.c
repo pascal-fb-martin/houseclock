@@ -155,8 +155,10 @@ void hc_broadcast_enumerate (void) {
     // will be used for sending periodic broadcast on each specific network.
     //
     udpclient_count = 0;
-    if (getifaddrs(&cards) == 0) {
-
+    if (getifaddrs(&cards)) {
+        printf ("[$s %d] getifaddrs() failed: %s\n",
+                __FILE__, __LINE__, strerror (errno));
+    } else {
         struct ifaddrs *cursor;
 
         for (cursor = cards; cursor != 0; cursor = cursor->ifa_next) {
