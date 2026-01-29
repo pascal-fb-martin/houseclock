@@ -139,6 +139,8 @@ static hc_ntp_status *hc_ntp_status_db = 0;
 static int hc_ntp_period;
 static int hc_ntp_client_cursor = 0;
 
+static int hc_ntp_broadcast = 0; // Force periodic broadcast even without GPS
+
 static const char *ReferenceNtpServerName = 0;
 static struct sockaddr_in ReferenceNtpServer = {0};
 
@@ -149,6 +151,7 @@ const char *hc_ntp_help (int level) {
         "-ntp-service=NAME:   name or port for the NTP socket",
         "-ntp-period=INT:     how often the NTP server advertises itself",
         "-ntp-reference=NAME: external reference NTP server, for calibration only",
+        "-ntp-broadcast:      do periodic broadcast even without GPS",
         NULL
     };
 
@@ -187,6 +190,9 @@ int hc_ntp_initialize (int argc, const char **argv) {
         echttp_option_match ("-ntp-service=", argv[i], &ntpservice);
         echttp_option_match ("-ntp-period=", argv[i], &ntpperiod);
         echttp_option_match ("-ntp-reference=", argv[i], &ReferenceNtpServerName);
+        if (echttp_option_present ("-ntp-broadcast", argv[i])) {
+            hc_ntp_broadcast = 1;
+        }
     }
     if (ReferenceNtpServerName) hc_ntp_resolve (ReferenceNtpServerName);
 
@@ -566,7 +572,7 @@ void hc_ntp_periodic (const struct timeval *wakeup) {
     }
     if (hc_test_mode()) return;
 
-    if (hc_nmea_active()) {
+    if (hc_ntp_broadcast || hc_nmea_active()) {
         if (hc_clock_synchronized() &&
             (wakeup->tv_sec >= latestBroadcast + hc_ntp_period)) {
 
