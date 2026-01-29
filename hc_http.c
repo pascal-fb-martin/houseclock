@@ -192,13 +192,13 @@ static size_t hc_http_status_time (char *cursor, int size, const char *prefix) {
               ",\"cycle\":%lld.%03d}",
               prefix,
               clock_db->synchronized?"true":"false",
-              (long long)clock_db->reference.tv_sec,
-              clock_db->reference.tv_usec/1000,
-              clock_db->precision,
+              (long long)(clock_db->reference.tv_sec),
+              (int)(clock_db->reference.tv_usec/1000),
+              (int)(clock_db->precision),
               clock_db->drift,
               clock_db->avgdrift,
               (long long) (clock_db->cycle.tv_sec),
-              clock_db->cycle.tv_usec/1000);
+              (int)(clock_db->cycle.tv_usec/1000));
 
     return strlen(cursor);
 }
