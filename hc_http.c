@@ -187,17 +187,17 @@ static size_t hc_http_status_time (char *cursor, int size, const char *prefix) {
     if (! hc_http_attach_clock()) return 0;
 
     snprintf (cursor, size,
-              "%s\"time\":{\"synchronized\":%s,\"reference\":%zd.%03d"
+              "%s\"time\":{\"synchronized\":%s,\"reference\":%lld.%03d"
               ",\"precision\":%d,\"drift\":%d,\"avgdrift\":%d"
-              ",\"cycle\":%zd.%03d}",
+              ",\"cycle\":%lld.%03d}",
               prefix,
               clock_db->synchronized?"true":"false",
-              (size_t)clock_db->reference.tv_sec,
+              (long long)clock_db->reference.tv_sec,
               clock_db->reference.tv_usec/1000,
               clock_db->precision,
               clock_db->drift,
               clock_db->avgdrift,
-              (size_t) (clock_db->cycle.tv_sec),
+              (long long) (clock_db->cycle.tv_sec),
               clock_db->cycle.tv_usec/1000);
 
     return strlen(cursor);

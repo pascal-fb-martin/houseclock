@@ -111,7 +111,6 @@ int main (int argc, const char **argv) {
     int gpstty = -1;
 
     time_t last_period = 0;
-    struct timeval now;
     const char *dbsizestr = "0";
 
     // These strange statements are to make sure that fds 0 to 2 are
@@ -166,6 +165,7 @@ int main (int argc, const char **argv) {
     putenv("TZ=UTC"); // Always use UTC time.
 
     for (;;) {
+        struct timeval now;
         struct timeval timeout;
         fd_set readset;
 
@@ -180,12 +180,14 @@ int main (int argc, const char **argv) {
             if (maxfd <= gpstty) maxfd = gpstty + 1;
         }
 
-        gettimeofday(&now, NULL);
         timeout.tv_sec = 1;
         timeout.tv_usec = 0;
-
         count = select(maxfd+1, &readset, NULL, NULL, &timeout);
-        gettimeofday(&now, NULL);
+
+        if(gettimeofday(&now, NULL)) {
+             printf ("[%s %d] gettimeofday() error: %s\n",
+                     __FILE__, __LINE__, strerror(errno));
+        }
 
         if (count >= 0) {
             if (gpstty > 0) {

@@ -284,10 +284,10 @@ static void hc_ntp_broadcastmsg (const ntpHeaderV3 *head,
     // broadcast packets from other NTP software (e.g. ntpd or chrony).
 
     if (hc_debug_enabled())
-        printf ("Received broadcast from %s at %ld.%03.3d: "
+        printf ("Received broadcast from %s at %lld.%03.3d: "
                 "stratum=%d transmit=%u/%08x\n",
                 name,
-                (long)(receive->tv_sec), (int)(receive->tv_usec / 1000),
+                (long long)(receive->tv_sec), (int)(receive->tv_usec / 1000),
                 head->stratum,
                 ntohl(head->transmit.seconds),
                 ntohl(head->transmit.fraction));
@@ -572,7 +572,9 @@ void hc_ntp_periodic (const struct timeval *wakeup) {
     }
     if (hc_test_mode()) return;
 
-    if (hc_ntp_broadcast || hc_nmea_active()) {
+    int nmea_active = hc_nmea_active();
+
+    if (hc_ntp_broadcast || nmea_active) {
         if (hc_clock_synchronized() &&
             (wakeup->tv_sec >= latestBroadcast + hc_ntp_period)) {
 
@@ -591,7 +593,6 @@ void hc_ntp_periodic (const struct timeval *wakeup) {
 
             latestBroadcast = wakeup->tv_sec;
             hc_ntp_status_db->live.broadcast += 1;
-            hc_ntp_status_db->stratum = 1;
 
             if (hc_debug_enabled())
                 printf ("Sent broadcast packet at %ld.%03.3d: "
@@ -602,8 +603,12 @@ void hc_ntp_periodic (const struct timeval *wakeup) {
                         ntohl(ntpBroadcast.transmit.fraction),
                         dispersion);
         }
+    }
+
+    if (nmea_active) {
         hc_ntp_status_db->mode = 'S';
         hc_ntp_status_db->source = -1;
+        hc_ntp_status_db->stratum = 1;
     } else {
         hc_ntp_status_db->mode = 'C';
         if (hc_ntp_status_db->source >= 0) {
