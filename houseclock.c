@@ -106,7 +106,7 @@ int main (int argc, const char **argv) {
     int maxfd = 1;
     int count;
     int ntpsocket;
-    pid_t httpid;
+    pid_t httpid = 0;
 
     int gpstty = -1;
 

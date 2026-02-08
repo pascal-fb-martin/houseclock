@@ -156,7 +156,7 @@ void hc_broadcast_enumerate (void) {
     //
     udpclient_count = 0;
     if (getifaddrs(&cards)) {
-        printf ("[$s %d] getifaddrs() failed: %s\n",
+        printf ("[%s %d] getifaddrs() failed: %s\n",
                 __FILE__, __LINE__, strerror (errno));
     } else {
         struct ifaddrs *cursor;

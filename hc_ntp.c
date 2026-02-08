@@ -24,6 +24,9 @@
  *    is active (GPS device is present and a fix was obtained), and as
  *    a SNTP broadcast client otherwise.
  *
+ *    There is an option to force SNTP broadcast even when not stratum 1,
+ *    to handle time propagation through subnetworks.
+ *
  * SYNOPSYS:
  *
  * int hc_ntp_initialize (const char *service);
@@ -102,7 +105,7 @@ ntpHeaderV3 ntpRequest = {
     {0, 0}  // transmit.
 };
 
-// The template for all responses (the first fields never change):
+// The template for all responses (most first fields never change):
 //
 ntpHeaderV3 ntpResponse = {
     0x24, // li=0, vn=4, mode=4.
@@ -131,8 +134,6 @@ ntpHeaderV3 ntpBroadcast = {
     {0, 0}, // receive (always 0)
     {0, 0}  // transmit.
 };
-
-static const ntpTimestamp zeroTimestamp = {0, 0};
 
 static hc_ntp_status *hc_ntp_status_db = 0;
 
@@ -274,17 +275,22 @@ static void hc_ntp_broadcastmsg (const ntpHeaderV3 *head,
                                  const struct sockaddr_in *source,
                                  const struct timeval *receive) {
 
+    int ipaddress = source->sin_addr.s_addr;
+
+    // Filter out our own broadcast: don't synchronize with ourself.
+    // (Obviously this is not our own broadcast if none is sent..)
+    if (hc_ntp_broadcast && hc_broadcast_local (ipaddress)) return;
+
     int i, sender, available, weakest, worst;
     time_t death = receive->tv_sec - (hc_ntp_period * 3);
     const char *name = hc_broadcast_format(source);
-    int ipaddress = source->sin_addr.s_addr;
 
-    // This function handles any stratum value, even while this software
-    // only send broadcast with stratum 1. We do so because we might receive
+    // This function handles any stratum value, this software may send
+    // broadcast with higher stratum (optional). This also might receive
     // broadcast packets from other NTP software (e.g. ntpd or chrony).
 
     if (hc_debug_enabled())
-        printf ("Received broadcast from %s at %lld.%03.3d: "
+        printf ("Received broadcast from %s at %lld.%03d: "
                 "stratum=%d transmit=%u/%08x\n",
                 name,
                 (long long)(receive->tv_sec), (int)(receive->tv_usec / 1000),
@@ -478,11 +484,11 @@ static void hc_ntp_respond (const ntpHeaderV3 *head,
     hc_broadcast_reply ((char *)&ntpResponse, sizeof(ntpResponse), source);
 
     if (hc_debug_enabled())
-        printf ("Response to %s at %d.%0.03d: "
+        printf ("Response to %s at %lld.%03d: "
                 "stratum=%d origin=%u/%08x reference=%u/%08x "
                 "receive=%u/%08x transmit=%u/%08x dispersion=%dms\n",
             hc_broadcast_format (source),
-            (long)(transmit.tv_sec),
+            (long long)(transmit.tv_sec),
             (int)(transmit.tv_usec / 1000),
             ntpResponse.stratum,
             ntohl(ntpResponse.origin.seconds),
@@ -584,6 +590,9 @@ void hc_ntp_periodic (const struct timeval *wakeup) {
             hc_ntp_set_dispersion (dispersion, &ntpBroadcast);
             hc_ntp_set_reference (&ntpBroadcast);
 
+            ntpBroadcast.stratum =
+                nmea_active?1:(uint8_t)(hc_ntp_status_db->stratum);
+
             hc_broadcast_enumerate();
 
             gettimeofday (&timestamp, NULL);
@@ -595,9 +604,9 @@ void hc_ntp_periodic (const struct timeval *wakeup) {
             hc_ntp_status_db->live.broadcast += 1;
 
             if (hc_debug_enabled())
-                printf ("Sent broadcast packet at %ld.%03.3d: "
+                printf ("Sent broadcast packet at %lld.%03d: "
                         "transmit=%u/%08x, dispersion=%dms\n",
-                        (long)(timestamp.tv_sec),
+                        (long long)(timestamp.tv_sec),
                         (int)(timestamp.tv_usec / 1000),
                         ntohl(ntpBroadcast.transmit.seconds),
                         ntohl(ntpBroadcast.transmit.fraction),

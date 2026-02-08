@@ -170,11 +170,11 @@ static void hc_clock_force (const struct timeval *source,
     }
 
     DEBUG {
-        printf ("Forcing time from %ld.%03.3d to %ld.%03.3d, "
-                    "based on source clock %ld.%03.3d & latency %d\n",
-                (long)(now.tv_sec), (int)(now.tv_usec/1000),
-                (long)(corrected.tv_sec), (int)(corrected.tv_usec/1000),
-                (long)(source->tv_sec), (int)(source->tv_usec/1000), latency);
+        printf ("Forcing time from %lld.%03d to %lld.%03d, "
+                    "based on source clock %lld.%03d & latency %d\n",
+                (long long)(now.tv_sec), (int)(now.tv_usec/1000),
+                (long long)(corrected.tv_sec), (int)(corrected.tv_usec/1000),
+                (long long)(source->tv_sec), (int)(source->tv_usec/1000), latency);
     }
     if (settimeofday (&corrected, NULL) != 0) {
         printf ("settimeofday() error %d\n", errno);
@@ -182,8 +182,8 @@ static void hc_clock_force (const struct timeval *source,
     }
     DEBUG {
        gettimeofday (&corrected, 0);
-       printf ("Time set to %ld.%03.3d\n",
-               (long)(corrected.tv_sec), (int)(corrected.tv_usec/1000));
+       printf ("Time set to %lld.%03d\n",
+               (long long)(corrected.tv_sec), (int)(corrected.tv_usec/1000));
     }
     hc_clock_status_db->reference = corrected;
     hc_clock_status_db->synchronized = 1;
@@ -283,7 +283,7 @@ void hc_clock_synchronize(const struct timeval *source,
 
     if (clockShowDrift || hc_test_mode()) {
         printf ("[%d] %8.3f\n",
-                local->tv_sec%HC_CLOCK_METRICS_DEPTH, drift/1000.0);
+                (int)(local->tv_sec%HC_CLOCK_METRICS_DEPTH), drift/1000.0);
         if (hc_test_mode()) {
             if (absdrift < hc_clock_status_db->precision) {
                 hc_clock_status_db->synchronized = 1;
@@ -319,7 +319,7 @@ void hc_clock_synchronize(const struct timeval *source,
     absdrift = (drift < 0)? (0 - drift) : drift;
     hc_clock_status_db->avgdrift = (int)drift;
     if (clockShowDrift)
-        printf ("Average drift: %d ms\n", drift);
+        printf ("Average drift: %lld ms\n", (long long)drift);
 
     if (absdrift < hc_clock_status_db->precision) {
         DEBUG printf ("Clock is synchronized.\n");
@@ -329,8 +329,9 @@ void hc_clock_synchronize(const struct timeval *source,
         // by a small difference: adjust the time progressively.
         //
         DEBUG {
-            printf ("Time adjust at %ld.%3.3d (local), drift=%d ms\n",
-                    (long)local->tv_sec, (int)local->tv_usec/1000, drift);
+            printf ("Time adjust at %lld.%03d (local), drift=%lld ms\n",
+                    (long long)(local->tv_sec),
+                    (int)(local->tv_usec/1000), (long long)drift);
         }
         if (absdrift > 50 * hc_clock_status_db->precision) {
             DEBUG printf ("Synchronization was lost.\n");

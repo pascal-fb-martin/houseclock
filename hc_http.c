@@ -351,18 +351,17 @@ static const char *hc_http_ntp (const char *method, const char *uri,
 
     prefix = ",\"clients\":[";
     for (i = 0; i < HC_NTP_DEPTH; ++i) {
-        int delta;
-        struct hc_ntp_client *client = ntp_db->clients + i;
+        long long delta;
+        struct hc_ntp_client *c = ntp_db->clients + i;
 
-        if (client->local.tv_sec == 0) continue;
-        delta = ((client->origin.tv_sec - client->local.tv_sec) * 1000)
-                + ((client->origin.tv_usec - client->local.tv_usec) / 1000);
+        if (c->local.tv_sec == 0) continue;
+        delta = (long long) (((c->origin.tv_sec - c->local.tv_sec) * 1000)
+                + ((c->origin.tv_usec - c->local.tv_usec) / 1000));
         snprintf (buffer, sizeof(buffer),
-           "%s{\"address\":\"%s\",\"timestamp\":%d.%03d,"
-           "\"delta\":%d}",
+           "%s{\"address\":\"%s\",\"timestamp\":%lld.%03d,\"delta\":%lld}",
            prefix,
-           hc_broadcast_format(&(client->address)),
-           client->local.tv_sec, client->local.tv_usec / 1000, delta);
+           hc_broadcast_format(&(c->address)),
+           (long long)(c->local.tv_sec), (int)(c->local.tv_usec / 1000), delta);
         strcat (JsonBuffer, buffer);
         prefix = ",";
     }
@@ -370,20 +369,19 @@ static const char *hc_http_ntp (const char *method, const char *uri,
 
     prefix = ",\"servers\":[";
     for (i = 0; i < HC_NTP_POOL; ++i) {
-        int delta;
-        struct hc_ntp_server *server = ntp_db->pool + i;
+        long long delta;
+        struct hc_ntp_server *s = ntp_db->pool + i;
 
-        if (server->local.tv_sec == 0) continue;
-        delta = ((server->origin.tv_sec - server->local.tv_sec) * 1000)
-                + ((server->origin.tv_usec - server->local.tv_usec) / 1000);
+        if (s->local.tv_sec == 0) continue;
+        delta = (long long)(((s->origin.tv_sec - s->local.tv_sec) * 1000)
+                + ((s->origin.tv_usec - s->local.tv_usec) / 1000));
         snprintf (buffer, sizeof(buffer),
-           "%s{\"address\":\"%s\",\"timestamp\":%d.%03d,"
-               "\"delta\":%d,\"stratum\":%d}",
+           "%s{\"address\":\"%s\",\"timestamp\":%lld.%03d,"
+               "\"delta\":%lld,\"stratum\":%d}",
            prefix,
-           server->name,
-           server->local.tv_sec,
-           server->local.tv_usec / 1000,
-           delta, server->stratum);
+           s->name,
+           (long long)(s->local.tv_sec), (int)(s->local.tv_usec / 1000),
+           delta, s->stratum);
         strcat (JsonBuffer, buffer);
         prefix = ",";
     }
@@ -413,11 +411,11 @@ static const char *hc_http_traffic (const char *method, const char *uri,
         if (sample->timestamp == 0) continue;
 
         snprintf (buffer, sizeof(buffer),
-           "%s{\"timestamp\":%d,"
+           "%s{\"timestamp\":%lld,"
            "\"received\":%d,"
            "\"client\":%d,"
            "\"broadcast\":%d}",
-           prefix, sample->timestamp,
+           prefix, (long long)(sample->timestamp),
            sample->received, sample->client, sample->broadcast);
         strcat (JsonBuffer, buffer);
         prefix = ",";
@@ -626,8 +624,6 @@ static void hc_protect (const char *method, const char *uri) {
 }
 
 void hc_http (int argc, const char **argv) {
-
-    char *service;
 
     parent = getppid();
     gethostname (hc_hostname, sizeof(hc_hostname));

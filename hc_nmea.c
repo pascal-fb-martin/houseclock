@@ -186,7 +186,6 @@ const char *hc_nmea_help (int level) {
 
 static void hc_nmea_reset (void) {
 
-    int i;
     gpsCount = 0;
     hc_nmea_status_db->fix = 0;
     hc_nmea_status_db->fixtime = 0;
@@ -498,7 +497,7 @@ int hc_nmea_process (const struct timeval *received) {
 
     time_t interval;
     int speed;
-    int i, j, leftover;
+    int i, leftover;
     ssize_t length;
     int sentences [1024]; // Large enough to never overflow.
 
@@ -540,9 +539,11 @@ int hc_nmea_process (const struct timeval *received) {
     if (previous.tv_usec > 0 && interval > 500) {
         hc_nmea_timing (received, &bursttiming, speed, gpsCount);
         if (gpsShowNmea) {
-            printf ("Data received at %d.%03d, burst started at %d.%03d\n",
-                     received->tv_sec, received->tv_usec/1000,
-                     bursttiming.tv_sec, bursttiming.tv_usec/1000);
+            printf ("Data received at %lld.%03d, burst started at %lld.%03d\n",
+                     (long long)(received->tv_sec),
+                     (int)(received->tv_usec/1000),
+                     (long long)(bursttiming.tv_sec),
+                     (int)(bursttiming.tv_usec/1000));
         }
         // Whatever GPS time we got before is now old.
         hc_nmea_status_db->gpsdate[0] = hc_nmea_status_db->gpstime[0] = 0;
@@ -565,8 +566,9 @@ int hc_nmea_process (const struct timeval *received) {
         if (gpsBuffer[start++] != '$') continue; // Skip invalid sentence.
 
         if (gpsShowNmea) {
-            printf ("%11d.%03.3d: %s\n",
-                    timing.tv_sec, timing.tv_usec/1000, gpsBuffer+start);
+            printf ("%lld.%03d: %s\n",
+                    (long long)(timing.tv_sec),
+                    (int)(timing.tv_usec/1000), gpsBuffer+start);
         }
 
         hc_nmea_record (gpsBuffer+start, &timing);
