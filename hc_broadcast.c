@@ -55,6 +55,12 @@
  *    returns a string to a static buffer: the value is erased
  *    on each call.
  *
+ * int hc_broadcast_islocal (int address);
+ *
+ *    Return 1 if the provided address is one of this computer's addresses,
+ *    0 otherwise. This function is intended to filter out echoes of local
+ *    broadcasts.
+ *
  * int hc_broadcast_local (int address);
  *
  *    Return the local address on the same network as the provided address,
@@ -278,16 +284,44 @@ const char *hc_broadcast_format (const struct sockaddr_in *addr) {
     return formatted;
 }
 
+int hc_broadcast_islocal (int address) {
+
+    int i;
+
+    if (udpclient_count <= 0) return 0; // No broadcast, never local.
+
+    int debug = hc_debug_enabled();
+    if (debug)
+        printf ("Checking %08x against local addresses.\n", address);
+
+    for (i = udpclient_count - 1; i >= 0; --i) {
+        if (udpclient[i].address == address) {
+            if (debug)
+                printf ("Source address %08x is a local address.\n", address);
+            return 1;
+        }
+    }
+    return 0;
+}
+
 int hc_broadcast_local (int address) {
 
     int i;
 
     if (udpclient_count <= 0) return INADDR_LOOPBACK;
 
+    int debug = hc_debug_enabled();
+    if (debug)
+        printf ("Checking %08x against local addresses.\n", address);
+
     for (i = udpclient_count - 1; i >= 0; --i) {
         NetworkInterface *client = udpclient + i;
-        if ((client->address & client->mask) == (address & client->mask))
+        if ((client->address & client->mask) == (address & client->mask)) {
+            if (debug)
+                printf ("Source address %08x matches local address %08x.\n",
+                        address, client->address);
             return client->address;
+        }
     }
     return 0;
 }

@@ -279,7 +279,7 @@ static void hc_ntp_broadcastmsg (const ntpHeaderV3 *head,
 
     // Filter out our own broadcast: don't synchronize with ourself.
     // (Obviously this is not our own broadcast if none is sent..)
-    if (hc_ntp_broadcast && hc_broadcast_local (ipaddress)) return;
+    if (hc_ntp_broadcast && hc_broadcast_islocal (ipaddress)) return;
 
     int i, sender, available, weakest, worst;
     time_t death = receive->tv_sec - (hc_ntp_period * 3);

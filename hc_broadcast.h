@@ -40,4 +40,5 @@ int  hc_broadcast_receive
 const char *hc_broadcast_format (const struct sockaddr_in *addr);
 
 int hc_broadcast_local (int address);
+int hc_broadcast_islocal (int address);
 
