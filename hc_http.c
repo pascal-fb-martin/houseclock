@@ -220,11 +220,12 @@ static size_t hc_http_status_ntp (char *cursor, int size, const char *prefix) {
     }
 
     snprintf (cursor, size,
-              "%s\"ntp\":{\"source\":%s%s%s,\"mode\":\"%c\",\"stratum\":%d}",
+              "%s\"ntp\":{\"source\":%s%s%s,\"mode\":\"%c\",\"stratum\":%d,\"era\":%d}",
               prefix,
               quote, source, quote,
               ntp_db->mode,
-              ntp_db->stratum);
+              ntp_db->stratum,
+              ntp_db->era);
 
     return strlen(cursor);
 }

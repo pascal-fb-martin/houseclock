@@ -60,6 +60,7 @@ typedef struct {
     char   mode;
     int8_t source;
     short  stratum;
+    int    era;
     struct hc_ntp_server  pool[HC_NTP_POOL];
 
     struct hc_ntp_traffic live;

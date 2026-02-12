@@ -44,6 +44,7 @@
  */
 
 #include <string.h>
+#include <time.h>
 
 #include "houseclock.h"
 #include "hc_db.h"
@@ -54,6 +55,17 @@
 
 #define NTP_UNIX_EPOCH 2208988800ull
 
+// Since this server synchronizes based on broadcast, it cannot use
+// the roundtrip information (T1, T2, T3 and T4 in the RFC) to calculate
+// an offset that is era-independent. The solution used here is to
+// estimate the era based on the local time (assuming its is not widely off)
+// and avoid synchronizing during a change of era (could be unstable).
+//
+// Once we have estimated an era with some confidence, it is possible
+// to convert the NTP packet's timestamp to a Unix struct timeval.
+//
+static int ntpCurrentEra = 0;
+static time_t ntpEraChangePending = 0;
 
 typedef struct {
     uint16_t seconds;
@@ -181,11 +193,28 @@ static void hc_ntp_resolve (const char *name) {
     freeaddrinfo (resolved);
 }
 
+static void hc_ntp_assess_era (time_t now) {
+    int era = (int)(((long long)now + NTP_UNIX_EPOCH) / 0x100000000LL);
+    if (era != ntpCurrentEra) {
+        ntpEraChangePending = now + 10; // Ten seconds without sync.
+        ntpCurrentEra = era;
+    }
+}
+
+static int hc_ntp_switching_era (time_t now) {
+    hc_ntp_assess_era (now);
+    if (now < ntpEraChangePending) return 1;
+    return 0;
+}
+
 int hc_ntp_initialize (int argc, const char **argv) {
 
     int i;
     const char *ntpservice = "ntp";
     const char *ntpperiod = "300";
+
+    hc_ntp_assess_era (time(0));
+    ntpEraChangePending = 0; // This was the first ever assessment.
 
     for (i = 1; i < argc; ++i) {
         echttp_option_match ("-ntp-service=", argv[i], &ntpservice);
@@ -226,6 +255,7 @@ int hc_ntp_initialize (int argc, const char **argv) {
     hc_ntp_status_db->source = -1;
     hc_ntp_status_db->mode = 'I';
     hc_ntp_status_db->stratum = 0;
+    hc_ntp_status_db->era = ntpCurrentEra;
 
     return hc_broadcast_open (ntpservice);
 }
@@ -243,7 +273,10 @@ static uint32_t usec2fraction(uint32_t usec)
 
 static void hc_ntp_get_timestamp (struct timeval *local,
                                   const ntpTimestamp *ntp) {
-    local->tv_sec = ntohl(ntp->seconds) - NTP_UNIX_EPOCH;
+    long long ntptime = ntohl(ntp->seconds);
+    ntptime &= 0xffffffffLL; // The ntp->seconds field is unsigned.
+    if (ntpCurrentEra) ntptime += (ntpCurrentEra * 0x100000000LL);
+    local->tv_sec = (time_t)(ntptime - NTP_UNIX_EPOCH);
     local->tv_usec = fraction2usec(ntohl(ntp->fraction));
 }
 
@@ -396,7 +429,8 @@ static void hc_ntp_broadcastmsg (const ntpHeaderV3 *head,
 
     // Synchronize our time on the elected time source.
     //
-    if (sender == hc_ntp_status_db->source) {
+    if ((sender == hc_ntp_status_db->source) &&
+        (!hc_ntp_switching_era (receive->tv_sec))) {
         hc_clock_synchronize
             (&(hc_ntp_status_db->pool[sender].origin), receive, 0);
         hc_ntp_status_db->stratum = hc_ntp_status_db->pool[sender].stratum + 1;
@@ -570,6 +604,9 @@ void hc_ntp_periodic (const struct timeval *wakeup) {
         hc_ntp_status_db->live.client = 0;
         hc_ntp_status_db->live.broadcast = 0;
         latestPeriod += 1;
+
+        hc_ntp_assess_era (wakeup->tv_sec);
+        hc_ntp_status_db->era = ntpCurrentEra;
     }
 
     if (wakeup->tv_sec >= latestRequest + 10) {

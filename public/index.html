@@ -38,6 +38,7 @@ function clockUpdate (response) {
     if (response.clock.ntp) {
         document.getElementById('source').innerHTML = response.clock.ntp.source;
         document.getElementById('stratum').innerHTML = response.clock.ntp.stratum;
+        document.getElementById('era').innerHTML = response.clock.ntp.era;
     }
     var sysdate = new Date (response.timestamp * 1000);
     document.getElementById('systime').innerHTML = shortTime(sysdate);
@@ -114,6 +115,8 @@ window.onload = function() {
    <td><span class="housedata" id="source"></span></td></tr>
    <tr><td>Stratum:</td>
    <td><span class="housedata" id="stratum"></span></td></tr>
+   <tr><td>Era:</td>
+   <td><span class="housedata" id="era"></span></td></tr>
    </table>
    </div>
    </td></tr>
