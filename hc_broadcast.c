@@ -187,7 +187,7 @@ void hc_broadcast_enumerate (void) {
             client->broadcast = client->address | (~ client->mask);
 
             client->socket = hc_broadcast_socket(client->address, 0);
-            strncpy (client->name, cursor->ifa_name, sizeof(client->name));
+            memccpy (client->name, cursor->ifa_name, 0, sizeof(client->name));
 
             if (++udpclient_count >= UDPCLIENT_MAX) break;
         }

@@ -375,8 +375,8 @@ static void hc_ntp_broadcastmsg (const ntpHeaderV3 *head,
             }
         }
         sender = available;
-        strncpy (hc_ntp_status_db->pool[sender].name,
-                 name, sizeof(hc_ntp_status_db->pool[0].name));
+        memccpy (hc_ntp_status_db->pool[sender].name,
+                 name, 0, sizeof(hc_ntp_status_db->pool[0].name));
         column = strchr (hc_ntp_status_db->pool[sender].name, ':');
         if (column) *column = 0; // No need for the sender port number anymore.
         if (hc_debug_enabled())
@@ -493,7 +493,7 @@ static void hc_ntp_respond (const ntpHeaderV3 *head,
 
     if (hc_nmea_active()) {
         ntpResponse.stratum = 1;
-        strncpy (ntpResponse.refid, "GPS", sizeof(ntpResponse.refid));
+        memccpy (ntpResponse.refid, "GPS", 0, sizeof(ntpResponse.refid));
     } else {
         int ntpsource = hc_ntp_status_db->source;
         if (ntpsource < 0) return; // No time source.

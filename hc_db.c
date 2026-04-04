@@ -136,7 +136,7 @@ int hc_db_new (const char *name, int size, int count) {
     int hash = hc_db_hash(name, HC_DB_MODULO);
     table->link.size = size * count;
     table->link.next = hc_db->index[hash];
-    strncpy (table->link.name, name, sizeof(table->link.name));
+    memccpy (table->link.name, name, 0, sizeof(table->link.name));
     table->link.name[sizeof(table->link.name)-1] = 0;
     table->count = count;
     table->record = size;
