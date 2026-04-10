@@ -35,6 +35,8 @@
 #include <errno.h>
 #include <time.h>
 
+#include "echttp_libc.h"
+
 #include "houseclock.h"
 #include "hc_db.h"
 #include "hc_nmea.h"
@@ -155,8 +157,8 @@ static size_t hc_http_status_gps (char *cursor, int size, const char *prefix) {
     //
     if (echttp_islocal() == 0 ||
             nmea_db->latitude[0] == 0 || nmea_db->longitude[0] == 0) {
-        memccpy (latitude, "0.0", 0, sizeof(latitude));
-        memccpy (longitude, "0.0", 0, sizeof(longitude));
+        strtcpy (latitude, "0.0", sizeof(latitude));
+        strtcpy (longitude, "0.0", sizeof(longitude));
     } else {
         hc_nmea_convert (latitude, sizeof(latitude),
                          nmea_db->latitude, nmea_db->hemisphere[0]);

@@ -145,6 +145,8 @@
 #include <fcntl.h>
 #include <time.h>
 
+#include "echttp_libc.h"
+
 #include "houseclock.h"
 #include "hc_db.h"
 #include "hc_clock.h"
@@ -343,7 +345,7 @@ static void hc_nmea_record (const char *sentence,
     gpsSentence *decoded =
         hc_nmea_status_db->history + hc_nmea_status_db->gpsproducer;
 
-    memccpy (decoded->sentence, sentence, 0, sizeof(decoded->sentence));
+    strtcpy (decoded->sentence, sentence, sizeof(decoded->sentence));
     decoded->timing = *timing;
     decoded->flags = 0;
 }
@@ -362,10 +364,10 @@ static void hc_nmea_mark (int flags, const struct timeval *timestamp) {
 
 static void hc_nmea_store_position (char **fields) {
     if (! gpsPrivacy) {
-        memccpy (hc_nmea_status_db->latitude,
-                 fields[0], 0, sizeof(hc_nmea_status_db->latitude));
-        memccpy (hc_nmea_status_db->longitude,
-                 fields[2], 0, sizeof(hc_nmea_status_db->longitude));
+        strtcpy (hc_nmea_status_db->latitude,
+                 fields[0], sizeof(hc_nmea_status_db->latitude));
+        strtcpy (hc_nmea_status_db->longitude,
+                 fields[2], sizeof(hc_nmea_status_db->longitude));
         hc_nmea_status_db->hemisphere[0] = fields[1][0];
         hc_nmea_status_db->hemisphere[1] = fields[3][0];
     }
@@ -443,8 +445,8 @@ static int hc_nmea_decode (char *sentence) {
     } else if (strcmp ("TXT", message) == 0) {
         int count = hc_nmea_status_db->textcount;
         if (count < HC_NMEA_TEXT_LINES) {
-            memccpy (hc_nmea_status_db->text[count].line,
-                 fields[4], 0, sizeof (hc_nmea_status_db->text[0].line));
+            strtcpy (hc_nmea_status_db->text[count].line,
+                     fields[4], sizeof (hc_nmea_status_db->text[0].line));
             hc_nmea_status_db->textcount += 1;
         }
     }
@@ -617,7 +619,7 @@ void hc_nmea_convert (char *buffer, int size,
     } else {
         digits = strlen(source) - 2;
     }
-    memccpy (buffer, source, 0, digits);
+    strtcpy (buffer, source, digits);
     buffer[digits] = 0;
     double degrees = atoi(buffer);
     double minutes = atof(source+digits);

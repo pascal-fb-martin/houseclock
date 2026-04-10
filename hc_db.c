@@ -59,6 +59,8 @@
 #include <fcntl.h>
 #include <errno.h>
 
+#include "echttp_libc.h"
+
 #include "houseclock.h"
 #include "hc_db.h"
 
@@ -136,7 +138,7 @@ int hc_db_new (const char *name, int size, int count) {
     int hash = hc_db_hash(name, HC_DB_MODULO);
     table->link.size = size * count;
     table->link.next = hc_db->index[hash];
-    memccpy (table->link.name, name, 0, sizeof(table->link.name));
+    strtcpy (table->link.name, name, sizeof(table->link.name));
     table->link.name[sizeof(table->link.name)-1] = 0;
     table->count = count;
     table->record = size;

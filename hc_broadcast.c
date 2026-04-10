@@ -83,6 +83,8 @@
 #include <arpa/inet.h>
 #include <ifaddrs.h>
 
+#include "echttp_libc.h"
+
 #include "houseclock.h"
 #include "hc_broadcast.h"
 
@@ -187,7 +189,7 @@ void hc_broadcast_enumerate (void) {
             client->broadcast = client->address | (~ client->mask);
 
             client->socket = hc_broadcast_socket(client->address, 0);
-            memccpy (client->name, cursor->ifa_name, 0, sizeof(client->name));
+            strtcpy (client->name, cursor->ifa_name, sizeof(client->name));
 
             if (++udpclient_count >= UDPCLIENT_MAX) break;
         }
