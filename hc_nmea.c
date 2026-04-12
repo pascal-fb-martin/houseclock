@@ -656,8 +656,9 @@ int hc_nmea_listen (void) {
 
     // Remove echo of characters from the GPS device.
     hc_tty_set (gpsTty, gpsSpeed);
-    snprintf (hc_nmea_status_db->gpsdevice,
-              sizeof(hc_nmea_status_db->gpsdevice), "%s", gpsDevice);
+
+    strtcpy (hc_nmea_status_db->gpsdevice,
+             gpsDevice, sizeof(hc_nmea_status_db->gpsdevice));
     return gpsTty;
 }
 
