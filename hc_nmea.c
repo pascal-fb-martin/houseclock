@@ -619,8 +619,7 @@ void hc_nmea_convert (char *buffer, int size,
     } else {
         digits = strlen(source) - 2;
     }
-    strtcpy (buffer, source, digits);
-    buffer[digits] = 0;
+    strtcpy (buffer, source, digits+1); // +1 for the null terminator.
     double degrees = atoi(buffer);
     double minutes = atof(source+digits);
     snprintf (buffer, size, "%f", degrees + (minutes / 60.0));
