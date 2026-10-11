@@ -8,6 +8,9 @@ Standard-Version: 4.7.0
 Package: houseclock
 Architecture: {{arch}}
 Depends: houseportal (>= 2.9)
+Provides: time-daemon
+Replaces: time-daemon
+Conflicts: time-daemon
 Description: A House service to synchronize the system time
  HouseClock is part of the House suite of web services.
  .
