@@ -19,12 +19,18 @@ function clockUpdate (response) {
     if (hasdata) {
         if (response.clock.gps.device)
             document.getElementById('gpsdevice').innerHTML = response.clock.gps.device;
+        else
+            document.getElementById('gpsdevice').innerHTML = '';
         document.getElementById('gpsdate').innerHTML = response.clock.gps.gpsdate;
         document.getElementById('gpstime').innerHTML = response.clock.gps.gpstime;
         document.getElementById('latitude').innerHTML = response.clock.gps.latitude;
         document.getElementById('longitude').innerHTML = response.clock.gps.longitude;
     } else {
+        document.getElementById('gpsdevice').innerHTML = '';
         document.getElementById('gpsdate').innerHTML = '(No Fix)';
+        document.getElementById('gpstime').innerHTML = '';
+        document.getElementById('latitude').innerHTML = '';
+        document.getElementById('longitude').innerHTML = '';
     }
     if (response.clock.time) {
         if (response.clock.time.synchronized) {
