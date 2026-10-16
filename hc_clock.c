@@ -75,6 +75,7 @@
 
 #define HC_CLOCK_LEARNING_PERIOD 10
 
+static int neverSynchronized = 1;
 static int clockShowDrift = 0;
 
 // Allocate enough spaces in the metrics table for 6 minutes worth of data,
@@ -142,6 +143,8 @@ void hc_clock_initialize (int argc, const char **argv) {
     hc_clock_status_db->precision = precision;
     hc_clock_status_db->sampling = 0;
     hc_clock_status_db->drift = 0;
+
+    neverSynchronized = 1;
 
     struct timeval now;
     gettimeofday (&now, NULL);
@@ -294,11 +297,12 @@ void hc_clock_synchronize(const struct timeval *source,
         }
     }
 
-    if ((!previous_call) || absdrift >= 10000) {
+    if (neverSynchronized || absdrift >= 10000) {
         // Too much of a difference: force system time.
         hc_clock_metrics_db[now%HC_CLOCK_METRICS_DEPTH].adjust += 1;
         hc_clock_force (source, local, latency);
         hc_clock_start_learning(source);
+        neverSynchronized = 0;
         return;
     }
 
