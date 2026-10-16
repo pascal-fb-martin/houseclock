@@ -172,12 +172,12 @@ static size_t hc_http_status_gps (char *cursor, int size, const char *prefix) {
        snprintf (cursor, size,
                  "%s\"gps\":{\"fix\":true, \"fixtime\":%u"
                  ",\"gpstime\":\"%s\",\"gpsdate\":\"%4d%2.2s%2.2s\""
-                 ",\"latitude\":%s,\"longitude\":%s}",
+                 ",\"latitude\":%s,\"longitude\":%s,\"device\":\"%s\"}",
                  prefix,
                  (unsigned int)nmea_db->fixtime,
                  nmea_db->gpstime,
                  2000 + (date[4]-'0')*10 + (date[5]-'0'), date+2, date,
-                 latitude, longitude);
+                 latitude, longitude, nmea_db->gpsdevice);
     } else {
        snprintf (cursor, size, "%s\"gps\":{\"fix\":false}", prefix);
     }

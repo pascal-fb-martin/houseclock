@@ -5,6 +5,7 @@ HOUSEAPP=houseclock
 case $1 in
     configure|abort-upgrade|abort-deconfigure|abort-remove)
         . /usr/local/share/house/postinstall
+        /usr/bin/udevadm control --reload-rules && /usr/bin/udevadm trigger
         ;;
 esac
 

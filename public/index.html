@@ -17,6 +17,8 @@ function clockUpdate (response) {
         hasdata = response.clock.gps.fix;
     }
     if (hasdata) {
+        if (response.clock.gps.device)
+            document.getElementById('gpsdevice').innerHTML = response.clock.gps.device;
         document.getElementById('gpsdate').innerHTML = response.clock.gps.gpsdate;
         document.getElementById('gpstime').innerHTML = response.clock.gps.gpstime;
         document.getElementById('latitude').innerHTML = response.clock.gps.latitude;
@@ -80,6 +82,8 @@ window.onload = function() {
    <div class="housepane">
    <table class="housestatus">
    <tr><td colspan="2"><span class="housetitle">GPS</span></td></tr>
+   <tr><td>Device:</td>
+   <td><span class="housedata" id="gpsdevice"></span></td></tr>
    <tr><td>Date:</td>
    <td><span class="housedata" id="gpsdate"></span></td></tr>
    <tr><td>Time:</td>

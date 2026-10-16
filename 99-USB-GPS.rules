@@ -8,14 +8,14 @@
 # with a real USB serial adapter when an identified GPS device is attached.
 
 # U-Blox GPS devices
-SUBSYSTEMS=="usb", ATTRS{idVendor}=="1546", SYMLINK+="ttyGPS/i-%k", MODE="0666"
+SUBSYSTEM=="tty", ATTRS{idVendor}=="1546", SYMLINK+="ttyGPS/i-%k", MODE="0666"
 
 # Prolific based dongles
-SUBSYSTEMS=="usb", ATTRS{idVendor}=="067b", SYMLINK+="ttyGPS/s-%k", MODE="0666"
+SUBSYSTEM=="tty", ATTRS{idVendor}=="067b", SYMLINK+="ttyGPS/s-%k", MODE="0666"
 
 # Silicon Labs base dongles
-SUBSYSTEMS=="usb", ATTRS{idVendor}=="10c4", SYMLINK+="ttyGPS/s-%k", MODE="0666"
+SUBSYSTEM=="tty", ATTRS{idVendor}=="10c4", SYMLINK+="ttyGPS/s-%k", MODE="0666"
 
 # FTDI base dongles
-SUBSYSTEMS=="usb", ATTRS{idVendor}=="0403", SYMLINK+="ttyGPS/s-%k", MODE="0666"
+SUBSYSTEM=="tty", ATTRS{idVendor}=="0403", SYMLINK+="ttyGPS/s-%k", MODE="0666"
 
