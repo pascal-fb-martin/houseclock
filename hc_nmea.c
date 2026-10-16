@@ -160,7 +160,8 @@ static int  gpsCount = 0;    // How much NMEA data is stored.
 
 #define GPS_EXPIRES 5
 
-static const char *gpsDevice = "/dev/ttyACM0";
+static const char *gpsDevice = 0;
+static int gpsUseDefaultTty = 0;
 static int gpsTty = -1;
 
 static int gpsUseBurst = 0;
@@ -209,8 +210,9 @@ void hc_nmea_initialize (int argc, const char **argv) {
     const char *latency_option = "70";
     const char *speed_option = "0";
 
-    gpsDevice = "/dev/ttyACM0";
+    gpsDevice = 0;
     gpsUseBurst = 0;
+    gpsUseDefaultTty = 0;
 
     for (i = 1; i < argc; ++i) {
         echttp_option_match ("-gps=", argv[i], &gpsDevice);
@@ -222,6 +224,11 @@ void hc_nmea_initialize (int argc, const char **argv) {
     }
     gpsLatency = atoi(latency_option);
     gpsSpeed = atoi(speed_option);
+
+    if (!gpsDevice) {
+        gpsUseDefaultTty = 1;
+        gpsDevice = hc_tty_find ();
+    }
 
     if (hc_nmea_status_db == 0) {
         i = hc_db_new (HC_NMEA_STATUS, sizeof(hc_nmea_status), 1);
@@ -647,9 +654,10 @@ int hc_nmea_listen (void) {
 
     static time_t LastTry = 0;
     time_t now = time(0);
-    if (now < LastTry + 5) return gpsTty;
-
+    if (now < LastTry + GPS_EXPIRES) return -1;
     LastTry = now;
+
+    if (gpsUseDefaultTty) gpsDevice = hc_tty_find();
     gpsTty = open(gpsDevice, O_RDONLY);
     if (gpsTty < 0) return gpsTty;
 

@@ -69,15 +69,20 @@ install-ui: install-preamble
 	$(INSTALL) -m 0755 -d $(DESTDIR)$(SHARE)/public/ntp
 	$(INSTALL) -m 0644 public/* $(DESTDIR)$(SHARE)/public/ntp
 
+install-rules:
+	$(INSTALL) -m 0755 -d $(DESTDIR)/etc/udev/rules.d
+	$(INSTALL) -m 0644 99-USB-GPS.rules $(DESTDIR)/etc/udev/rules.d
+
 install-runtime: install-preamble
 	$(INSTALL) -m 0755 -s houseclock $(DESTDIR)$(prefix)/bin
 	touch $(DESTDIR)/etc/default/houseclock
 
-install-app: install-ui install-runtime
+install-app: install-ui install-rules install-runtime
 
 uninstall-app:
 	rm -rf $(DESTDIR)$(SHARE)/public/ntp
 	rm -f $(DESTDIR)$(prefix)/bin/houseclock
+	rm -f $(DESTDIR)/etc/udev/rules.d/99-USB-GPS.rules
 
 purge-app:
 
@@ -92,7 +97,7 @@ clean-systemd::
 
 # Build a private Debian package. -------------------------------
 
-install-package: install-ui install-runtime install-systemd
+install-package: install-app install-systemd
 
 debian-package: debian-package-generic
 

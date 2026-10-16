@@ -1,3 +1,10 @@
+houselinux (2.9) UNRELEASED; urgency=low
+
+   * Avoid conflicts with RPi Pico boards
+   * Replace all other time synchronization services
+
+ -- Pascal Martin <pascal.fb.martin@gmail.com>  Fri, 16 Oct 2026 12:00:00 PDT
+
 houselinux (2.8) UNRELEASED; urgency=low
 
    * Use a more semantic web UI with better layout.

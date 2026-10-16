@@ -20,5 +20,6 @@
  *
  * hc_tty.h - tty configuration's OS interface.
  */
+const char *hc_tty_find (void);
 int hc_tty_set (int fd, int baud);
 

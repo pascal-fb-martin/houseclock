@@ -1,0 +1,21 @@
+# The goal of the rules here is to filter out specific devices that cannot
+# be a GPS receiver but appear as USB serial, e.g. Raspberry Pi Pico.
+#
+# The symbolic link is named with an "i-" prefix when the device is identified
+# as a GPS dongle, and a "s-" prefix when the device is just suspected to be
+# a GPS dongle. This matters because the software can look for an "i-*" link
+# first, and fallback to "s-*" links later. This lowers the risk of clashing
+# with a real USB serial adapter when an identified GPS device is attached.
+
+# U-Blox GPS devices
+SUBSYSTEMS=="usb", ATTRS{idVendor}=="1546", SYMLINK+="ttyGPS/i-%k", MODE="0666"
+
+# Prolific based dongles
+SUBSYSTEMS=="usb", ATTRS{idVendor}=="067b", SYMLINK+="ttyGPS/s-%k", MODE="0666"
+
+# Silicon Labs base dongles
+SUBSYSTEMS=="usb", ATTRS{idVendor}=="10c4", SYMLINK+="ttyGPS/s-%k", MODE="0666"
+
+# FTDI base dongles
+SUBSYSTEMS=="usb", ATTRS{idVendor}=="0403", SYMLINK+="ttyGPS/s-%k", MODE="0666"
+

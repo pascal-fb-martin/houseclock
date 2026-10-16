@@ -61,11 +61,13 @@ In client mode, and while synchronized to a NTP broadcast server, the software a
 * make
 * sudo make install
 
-This installs HouseClock as a service (for Debian's systemd) and starts it. If ntpd or chrony was installed, this stops and disables it. This also disables systemd-timesyncd.
+This installs HouseClock as a service (for Debian's systemd) and starts it. This also uninstalls any package that provides `time-daemon`, like `ntpd`, `chrony` or `systemd-timesyncd`.
+
+If a GPS device was plugged in any USB port, you now need to unplug it and then plug it back in. This is because HouseClock installs its own udev rules, and these are applied when a new device is plugged in.
 
 ## Configuration
 
-With default options, HouseClock will read from the GPS device at /dev/ttyACM0, apply a GPS receiver latency of 70ms, listen for HTTP requests on a dynamic tcp port number and handle NTP communication on the ntp udp port (123).
+With default options, HouseClock will read from the first GPS device listed in directory /dev/ttyGPS, apply a GPS receiver latency of 70ms, listen for HTTP requests on a dynamic tcp port number and handle NTP communication on the ntp udp port (123).
 
 All these default can be changed through command line options. For example, if the GPS device is different, [HousePortal](https://github.com/pascal-fb-martin/houseportal) was not installed and the http port is already in use (httpd is running), one can force other values using the -http-service and -gps options:
 

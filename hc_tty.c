@@ -21,19 +21,80 @@
  * hc_tty.c - Handle setting up a TTY device.
  *
  * This module hides the TTY configuration's OS interface.
+ *
+ * SYNOPSYS:
+ *
+ * const char *hc_tty_find (void);
+ *
+ *    Return the full path to the device the most likely to be a GPS.
+ *
+ * int hc_tty_set (int fd, int baud);
+ *
+ *    Configure the specified TTY device to a mode compatible with NMEA data.
  */
 
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <signal.h>
 #include <unistd.h>
 #include <errno.h>
 #include <sys/termios.h>
+#include <dirent.h>
 
 #include "hc_tty.h"
+
+static const char GpsDevPath[] = "/dev/ttyGPS";
+static char LastGpsDetected[512];
+
+static int hc_tty_identified (const struct dirent *ent) {
+    const char *name = ent->d_name;
+    if ((name[0] == 'i') && (name[1] == '-')) return 1;
+    return 0;
+}
+
+static int hc_tty_suspected (const struct dirent *ent) {
+    const char *name = ent->d_name;
+    if ((name[0] == 's') && (name[1] == '-')) return 1;
+    return 0;
+}
+
+static void hc_tty_cleanscan (struct dirent **files, int n) { 
+    int i;
+    for (i = 0; i < n; i++) {
+        free (files[i]);
+    }
+    if (files) free (files);
+}
+
+static const char *hc_tty_scan (int identified) {
+
+    struct dirent **devices = 0;
+    int n = scandir (GpsDevPath, &devices,
+                     identified?hc_tty_identified:hc_tty_suspected, alphasort);
+    if ((n <= 0) || (devices == 0)) return 0;
+    int i;
+    for (i = 0; i < n; i++) {
+        if (devices[i]->d_type != DT_LNK) continue;
+
+        // Select the first one found, for now
+        snprintf (LastGpsDetected, sizeof(LastGpsDetected),
+                  "%s/%s", GpsDevPath, devices[i]->d_name);
+        hc_tty_cleanscan (devices, n);
+        return LastGpsDetected;
+    }
+    hc_tty_cleanscan (devices, n);
+    return 0;
+}
+
+const char *hc_tty_find (void) {
+     const char *device = hc_tty_scan (1);
+     if (!device) device = hc_tty_scan (0);
+     return device;
+}
 
 int hc_tty_set (int fd, int baud) {
 
